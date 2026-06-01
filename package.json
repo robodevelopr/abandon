@@ -1,0 +1,12 @@
+{
+  "name": "abandon-relay",
+  "private": true,
+  "version": "0.1.0",
+  "description": "WebSocket relay for Stranded networked co-op.",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

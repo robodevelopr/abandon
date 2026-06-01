@@ -52,6 +52,24 @@
             box-shadow: 0 4px 6px rgba(0,0,0,0.5);
         }
         #btn-pause:hover { background: rgba(0, 0, 0, 0.95); border-color: #888; }
+        #btn-exit {
+            position: absolute;
+            top: 56px;
+            right: 10px;
+            z-index: 6;
+            display: none;
+            background: rgba(80, 20, 20, 0.75);
+            color: #ecf0f1;
+            border: 2px solid #844;
+            padding: 8px 18px;
+            font-family: inherit;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 5px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.5);
+        }
+        #btn-exit:hover { background: rgba(120, 30, 30, 0.95); border-color: #c66; }
         #pause-overlay {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -123,8 +141,8 @@
         <h1>STRANDED: ISLAND SURVIVAL</h1>
         <button class="menu-btn" id="btn-single">Start Single Player</button>
         <button class="menu-btn" id="btn-local">Start Local Co-op</button>
-        <button class="menu-btn disabled" id="btn-host">Host Network Game (Needs Server)</button>
-        <button class="menu-btn disabled" id="btn-join">Join Network Game (Needs Server)</button>
+        <button class="menu-btn" id="btn-host">Host Network Game</button>
+        <button class="menu-btn" id="btn-join">Join Network Game</button>
     </div>
 
     <div id="ui">
@@ -161,6 +179,7 @@
     </div>
 
     <button id="btn-pause" title="P">⏸ PAUSE</button>
+    <button id="btn-exit" title="Back to menu">✕ EXIT</button>
     <div id="pause-overlay">PAUSED</div>
 
     <canvas id="gameCanvas"></canvas>
@@ -177,6 +196,7 @@ function startGame(isSolo) {
     document.getElementById('main-menu').style.display = 'none';
     document.getElementById('ui').style.display = 'block';
     document.getElementById('btn-pause').style.display = 'block';
+    document.getElementById('btn-exit').style.display = 'block';
     resizeViewport();
     initWorld();
     gameRunning = true;
@@ -186,8 +206,8 @@ function startGame(isSolo) {
 document.getElementById('btn-single').addEventListener('click', () => startGame(true));
 document.getElementById('btn-local').addEventListener('click', () => startGame(false));
 
-document.getElementById('btn-host').addEventListener('click', () => alert("Requires a Node.js/WebSocket backend to route traffic."));
-document.getElementById('btn-join').addEventListener('click', () => alert("Requires a Node.js/WebSocket backend to route traffic."));
+document.getElementById('btn-host').addEventListener('click', () => netStart('host'));
+document.getElementById('btn-join').addEventListener('click', () => netStart('client'));
 
 // --- SPRITES (inline SVG icons for UI/shop) ---
 const SPRITES = {
@@ -215,12 +235,233 @@ const camera = { x: 0, y: 0 };
 
 function updateCamera() {
     if (!players.length) return;
-    const avgX = players.reduce((s, p) => s + p.x, 0) / players.length;
-    const avgY = players.reduce((s, p) => s + p.y, 0) / players.length;
+    // Follow the local player(s). In networked mode there's exactly one local
+    // player per browser; in local co-op all players are local.
+    const local = players.filter(p => p.isLocal !== false);
+    const pool = local.length ? local : players;
+    const avgX = pool.reduce((s, p) => s + p.x, 0) / pool.length;
+    const avgY = pool.reduce((s, p) => s + p.y, 0) / pool.length;
     camera.x = avgX - canvas.width / 2;
     camera.y = avgY - canvas.height / 2;
     camera.x = Math.max(0, Math.min(WORLD_WIDTH - canvas.width, camera.x));
     camera.y = Math.max(0, Math.min(WORLD_HEIGHT - canvas.height, camera.y));
+}
+
+// --- NETWORK ---
+// netMode is 'offline' for single-player & local co-op, 'host' for the player
+// running the simulation, or 'client' for someone connected to a host. Single-
+// player and local co-op never touch the socket — everything below short-
+// circuits when netMode === 'offline'.
+let netMode = 'offline';
+let netSocket = null;
+let netClientId = null; // assigned by server when role==='client'
+let netRoom = null;
+let netStateCounter = 0; // host: send a snapshot every N frames
+let netInputCounter = 0; // client: send keystate every N frames
+
+function netSend(obj) {
+    if (netSocket && netSocket.readyState === 1) {
+        netSocket.send(JSON.stringify(obj));
+    }
+}
+
+function netStart(role) {
+    // If the page was served over HTTP(S), default to a same-origin ws(s) URL.
+    // That makes "just visit the server's URL" the entire setup for a friend.
+    const sameOrigin = (location.protocol === 'http:' || location.protocol === 'https:')
+        ? `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`
+        : 'ws://localhost:8080';
+    const defaultUrl = localStorage.getItem('abandon_url') || sameOrigin;
+    const url = prompt('Relay server URL (use wss:// if hosted on HTTPS):', defaultUrl);
+    if (!url) return;
+    const defaultRoom = localStorage.getItem('abandon_room') || (role === 'host' ? 'room-' + Math.random().toString(36).slice(2, 7) : '');
+    const room = prompt(role === 'host' ? 'Pick a room name (share this with your friend):' : 'Room name to join:', defaultRoom);
+    if (!room) return;
+    localStorage.setItem('abandon_url', url);
+    localStorage.setItem('abandon_room', room);
+    netRoom = room;
+
+    let wsUrl;
+    try {
+        wsUrl = new URL(url);
+    } catch (e) { alert('Invalid URL'); return; }
+    wsUrl.searchParams.set('room', room);
+    wsUrl.searchParams.set('role', role);
+
+    netSocket = new WebSocket(wsUrl.toString());
+    netSocket.onopen = () => { /* waits for {type:'role',...} */ };
+    netSocket.onmessage = (e) => {
+        let msg;
+        try { msg = JSON.parse(e.data); } catch (_) { return; }
+        netOnMessage(msg);
+    };
+    netSocket.onerror = () => { alert('Could not connect to relay server.'); };
+    netSocket.onclose = () => {
+        if (netMode !== 'offline') {
+            alert('Disconnected from server.');
+            exitToMenu();
+        }
+    };
+}
+
+function netOnMessage(msg) {
+    if (msg.type === 'error') {
+        alert('Server: ' + msg.message);
+        return;
+    }
+    if (msg.type === 'role') {
+        if (msg.role === 'host') {
+            netMode = 'host';
+            singlePlayer = true; // host starts solo; clients add players as they join
+            startNetworkedGame();
+        } else {
+            netMode = 'client';
+            netClientId = msg.clientId;
+            startNetworkedGame();
+            // Show a "waiting for host" message until first state arrives.
+            gameState.showMessage(`Joined room ${msg.room}. Waiting for host...`);
+        }
+        return;
+    }
+    if (netMode === 'host') {
+        if (msg.type === 'client_join') {
+            addRemotePlayer(msg.clientId);
+        } else if (msg.type === 'client_leave') {
+            removeRemotePlayer(msg.clientId);
+        } else if (msg.type === 'input') {
+            const p = players.find(pp => pp.remoteClientId === msg.clientId);
+            if (!p) return;
+            const inp = p.networkInput;
+            if ('up' in msg)    inp.up    = !!msg.up;
+            if ('down' in msg)  inp.down  = !!msg.down;
+            if ('left' in msg)  inp.left  = !!msg.left;
+            if ('right' in msg) inp.right = !!msg.right;
+            if (msg.actionPress) inp.actionLatch = true;
+            if (msg.switchPress) inp.switchLatch = true;
+        }
+    } else if (netMode === 'client') {
+        if (msg.type === 'state') {
+            applyNetworkState(msg);
+        } else if (msg.type === 'host_left') {
+            alert('Host disconnected.');
+            exitToMenu();
+        }
+    }
+}
+
+// Host-side: create a new Player slot for an incoming client.
+function addRemotePlayer(clientId) {
+    if (players.find(p => p.remoteClientId === clientId)) return;
+    const palette = [
+        ['#16a085', '#1abc9c'],
+        ['#9b59b6', '#8e44ad'],
+        ['#f39c12', '#e67e22'],
+        ['#3498db', '#2980b9'],
+    ];
+    const [c1, c2] = palette[players.length % palette.length];
+    const cx = WORLD_WIDTH / 2;
+    const cy = WORLD_HEIGHT / 2;
+    const p = new Player(cx + (players.length + 1) * 60, cy, c1, c2,
+        // Fake control codes so local keypresses can't accidentally drive a remote slot.
+        { up:'__net_up', down:'__net_down', left:'__net_left', right:'__net_right', action:'__net_action', switch:'__net_switch' },
+        `P${players.length + 1}`);
+    p.isLocal = false;
+    p.remoteClientId = clientId;
+    p.networkInput = { up:false, down:false, left:false, right:false, actionLatch:false, switchLatch:false };
+    players.push(p);
+    gameState.showMessage(`${p.name} joined.`);
+}
+
+function removeRemotePlayer(clientId) {
+    const idx = players.findIndex(p => p.remoteClientId === clientId);
+    if (idx >= 0) {
+        const name = players[idx].name;
+        players.splice(idx, 1);
+        gameState.showMessage(`${name} disconnected.`);
+    }
+}
+
+// Host: broadcast a full snapshot of the world.
+function netBroadcastState() {
+    netSend({
+        type: 'state',
+        gs: {
+            time: gameState.time, day: gameState.day,
+            wood: gameState.wood, stone: gameState.stone, gold: gameState.gold,
+            rawMeat: gameState.rawMeat, cookedMeat: gameState.cookedMeat,
+            tools: gameState.tools,
+            message: gameState.message, messageTimer: gameState.messageTimer,
+        },
+        fire: { x: mainCampfire.x, y: mainCampfire.y, active: mainCampfire.active, currentFuel: mainCampfire.currentFuel },
+        players: players.map(p => ({
+            x: p.x, y: p.y, hp: p.hp, name: p.name, direction: p.direction,
+            color: p.color, secColor: p.secColor, heldIndex: p.heldIndex,
+            cid: p.remoteClientId == null ? 0 : p.remoteClientId, // 0 = host's own player
+        })),
+        cows: cows.map(c => ({ x: c.x, y: c.y, hp: c.hp, maxHP: c.maxHP, active: c.active, hitFlash: c.hitFlash })),
+        entities: entities.map(e => ({ x: e.x, y: e.y, t: e.type, a: e.active, cp: e.chopProgress || 0 })),
+        buildings: buildings.map(b => ({ x: b.x, y: b.y, t: b.type, w: b.w, h: b.h })),
+    });
+}
+
+// Client: replace local world arrays with the host's snapshot.
+function applyNetworkState(s) {
+    Object.assign(gameState, s.gs);
+
+    if (!mainCampfire) mainCampfire = new Campfire(s.fire.x, s.fire.y);
+    mainCampfire.x = s.fire.x;
+    mainCampfire.y = s.fire.y;
+    mainCampfire.active = s.fire.active;
+    mainCampfire.currentFuel = s.fire.currentFuel;
+
+    players = s.players.map(pd => {
+        const p = new Player(pd.x, pd.y, pd.color, pd.secColor,
+            { up:'-', down:'-', left:'-', right:'-', action:'-', switch:'-' }, pd.name);
+        p.hp = pd.hp;
+        p.direction = pd.direction;
+        p.heldIndex = pd.heldIndex;
+        p.remoteClientId = pd.cid;
+        p.isLocal = (pd.cid === netClientId);
+        return p;
+    });
+
+    cows = s.cows.map(cd => {
+        const c = new Cow(cd.x, cd.y);
+        c.hp = cd.hp;
+        c.maxHP = cd.maxHP;
+        c.active = cd.active;
+        c.hitFlash = cd.hitFlash;
+        return c;
+    });
+
+    entities = s.entities.map(ed => {
+        const e = new Entity(ed.x, ed.y, ed.t);
+        e.active = ed.a;
+        e.chopProgress = ed.cp;
+        return e;
+    });
+
+    buildings = s.buildings.map(bd => new Building(bd.x, bd.y, bd.t, bd.w, bd.h));
+}
+
+function startNetworkedGame() {
+    document.getElementById('main-menu').style.display = 'none';
+    document.getElementById('ui').style.display = 'block';
+    document.getElementById('btn-pause').style.display = 'block';
+    document.getElementById('btn-exit').style.display = 'block';
+    resizeViewport();
+    if (netMode === 'host') {
+        initWorld();
+    } else {
+        // Client: empty world until first snapshot arrives.
+        players = [];
+        cows = [];
+        entities = [];
+        buildings = [];
+        mainCampfire = new Campfire(WORLD_WIDTH / 2, WORLD_HEIGHT / 2);
+    }
+    gameRunning = true;
+    gameLoop();
 }
 
 // --- GAME STATE & TIMING ---
@@ -265,6 +506,47 @@ window.addEventListener('keydown', e => {
     if (e.code === 'KeyP' && gameRunning && !isMenuOpen()) togglePause();
 });
 
+function exitToMenu() {
+    gameRunning = false; // stops the gameLoop on its next rAF tick
+
+    // Disconnect from the relay (if connected). Clear net state before closing
+    // so the onclose handler doesn't try to bounce back into exitToMenu.
+    if (netSocket) {
+        const sock = netSocket;
+        netSocket = null;
+        try { sock.close(); } catch (_) {}
+    }
+    netMode = 'offline';
+    netClientId = null;
+    netRoom = null;
+
+    // Close any in-game overlays / menus
+    gameState.paused = false;
+    gameState.shopOpen = false;
+    gameState.blueprintShopOpen = false;
+    document.getElementById('ui').style.display = 'none';
+    document.getElementById('btn-pause').style.display = 'none';
+    document.getElementById('btn-exit').style.display = 'none';
+    document.getElementById('pause-overlay').style.display = 'none';
+    document.getElementById('shop-menu').style.display = 'none';
+    document.getElementById('bp-menu').style.display = 'none';
+    document.getElementById('btn-pause').textContent = '⏸ PAUSE';
+    document.getElementById('main-menu').style.display = 'flex';
+
+    // Reset run-specific state so a fresh game starts clean.
+    gameState.time = 8 * 60;
+    gameState.day = 1;
+    gameState.wood = 0;
+    gameState.stone = 0;
+    gameState.gold = 50;
+    gameState.rawMeat = 0;
+    gameState.cookedMeat = 0;
+    gameState.tools = { axe: false, pickaxe: false, sword: false };
+    gameState.message = "Find the shopkeeper!";
+    gameState.messageTimer = 300;
+}
+document.getElementById('btn-exit').addEventListener('click', exitToMenu);
+
 // --- INPUT ---
 const keys = {};
 window.addEventListener('keydown', e => { keys[e.code] = true; });
@@ -275,9 +557,19 @@ window.addEventListener('keydown', e => {
     if (e.repeat) return;
     if (isMenuOpen()) return;
     if (!gameRunning) return;
+    if (netMode === 'client') return; // client cycles by sending a press to the host
     for (const p of players) {
         if (p.controls.switch === e.code) { p.cycleItem(); break; }
     }
+});
+
+// Client → host input forwarder. The client maps a fixed key layout (WASD + F + E)
+// to the input message; the host treats those as the client's player controls.
+window.addEventListener('keydown', e => {
+    if (netMode !== 'client' || !gameRunning || isMenuOpen()) return;
+    if (e.repeat) return;
+    if (e.code === 'KeyF') netSend({ type: 'input', actionPress: true });
+    else if (e.code === 'KeyE') netSend({ type: 'input', switchPress: true });
 });
 
 // --- CLASSES ---
@@ -294,6 +586,9 @@ class Player {
         this.maxHP = 100;
         this.hp = 100;
         this.heldIndex = 0;
+        this.isLocal = true;            // host's own player & local co-op = true. Remote slots set this to false.
+        this.networkInput = null;       // populated for remote players on the host.
+        this.remoteClientId = null;     // null/0 = host's own; positive = remote client id.
     }
 
     getHeldItems() {
@@ -325,10 +620,16 @@ class Player {
 
     update() {
         if (isMenuOpen()) return; // freeze while menu open
-        if (keys[this.controls.up]) { this.y -= this.speed; this.direction = 'up'; }
-        if (keys[this.controls.down]) { this.y += this.speed; this.direction = 'down'; }
-        if (keys[this.controls.left]) { this.x -= this.speed; this.direction = 'left'; }
-        if (keys[this.controls.right]) { this.x += this.speed; this.direction = 'right'; }
+        const inp = this.networkInput || {
+            up:    !!keys[this.controls.up],
+            down:  !!keys[this.controls.down],
+            left:  !!keys[this.controls.left],
+            right: !!keys[this.controls.right],
+        };
+        if (inp.up)    { this.y -= this.speed; this.direction = 'up'; }
+        if (inp.down)  { this.y += this.speed; this.direction = 'down'; }
+        if (inp.left)  { this.x -= this.speed; this.direction = 'left'; }
+        if (inp.right) { this.x += this.speed; this.direction = 'right'; }
 
         this.x = Math.max(15, Math.min(WORLD_WIDTH - 15, this.x));
         this.y = Math.max(15, Math.min(WORLD_HEIGHT - 15, this.y));
@@ -630,12 +931,12 @@ class Entity {
             ctx.textAlign = 'center';
             ctx.fillText("BLUEPRINTS", 0, -45);
         } else if (this.type === 'cave') {
-            const isNight = isNightTime();
+            const open = isCaveOpen();
             ctx.fillStyle = '#34495e';
             ctx.beginPath(); ctx.arc(0, 0, 35, Math.PI, 0); ctx.fill();
-            ctx.fillStyle = isNight ? '#000' : '#2c3e50';
+            ctx.fillStyle = open ? '#000' : '#2c3e50';
             ctx.beginPath(); ctx.arc(0, 0, 25, Math.PI, 0); ctx.fill();
-            if (!isNight) {
+            if (!open) {
                 ctx.fillStyle = '#e74c3c';
                 ctx.font = '10px Courier';
                 ctx.textAlign = 'center';
@@ -892,9 +1193,20 @@ let cows = [];
 let buildings = [];
 let mainCampfire;
 
+// Offscreen canvas used for the night overlay so we can punch halo holes in it
+// without also erasing the world that was already rendered on the main canvas.
+let nightLayer = null;
+let nightLayerCtx = null;
+
 function resizeViewport() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
+    if (!nightLayer) {
+        nightLayer = document.createElement('canvas');
+        nightLayerCtx = nightLayer.getContext('2d');
+    }
+    nightLayer.width = canvas.width;
+    nightLayer.height = canvas.height;
 }
 
 function initWorld() {
@@ -962,6 +1274,12 @@ function isNightTime() {
     return hours >= 20 || hours < 6; // Night: 8PM to 6AM (used for cave gameplay)
 }
 
+// Cave gating: nightfall until the player makes it to day 10, after which it
+// stays open all the time so you can clear it in the morning.
+function isCaveOpen() {
+    return isNightTime() || gameState.day >= 10;
+}
+
 // Smooth darkness curve: 0 during day, MAX during full night, linear fade through dusk/dawn.
 const NIGHT_MAX_ALPHA = 0.6;
 function getNightOpacity() {
@@ -978,8 +1296,17 @@ function getNightOpacity() {
 
 function checkInteractions() {
     players.forEach((player) => {
-        if (!keys[player.controls.action]) return;
-        keys[player.controls.action] = false;
+        // Remote players signal "action" via a network-supplied latch; local
+        // players use the global keys map (and we consume the press here).
+        let actionPressed;
+        if (player.networkInput) {
+            actionPressed = player.networkInput.actionLatch;
+            player.networkInput.actionLatch = false;
+        } else {
+            actionPressed = !!keys[player.controls.action];
+            if (actionPressed) keys[player.controls.action] = false;
+        }
+        if (!actionPressed) return;
 
         let didSomething = false;
 
@@ -1054,7 +1381,7 @@ function checkInteractions() {
                 didSomething = true;
                 break;
             } else if (ent.type === 'cave') {
-                if (isNightTime()) gameState.showMessage(`Cave entrance is open... Prepare for combat.`);
+                if (isCaveOpen()) gameState.showMessage(`Cave entrance is open... Prepare for combat.`);
                 else gameState.showMessage(`The cave is sealed until nightfall.`);
                 didSomething = true;
                 break;
@@ -1311,7 +1638,17 @@ function updateUI() {
 function gameLoop() {
     if (!gameRunning) return;
 
-    if (!gameState.paused) {
+    // Clients don't simulate — they apply whatever state the host last sent.
+    // Hosts and offline games run the full simulation.
+    if (netMode !== 'client' && !gameState.paused) {
+        // Consume remote players' switch press latches (queued by network messages).
+        for (const p of players) {
+            if (p.networkInput && p.networkInput.switchLatch) {
+                p.cycleItem();
+                p.networkInput.switchLatch = false;
+            }
+        }
+
         // Time Update
         gameState.time += TIME_SPEED;
         if (gameState.time >= 24 * 60) {
@@ -1344,6 +1681,23 @@ function gameLoop() {
 
         checkInteractions();
     }
+
+    // Host broadcasts state ~20Hz; client forwards keystate ~30Hz.
+    if (netMode === 'host' && !gameState.paused) {
+        if (++netStateCounter >= 3) { netBroadcastState(); netStateCounter = 0; }
+    } else if (netMode === 'client' && !gameState.paused) {
+        if (++netInputCounter >= 2) {
+            netSend({
+                type: 'input',
+                up:    !!keys.KeyW || !!keys.ArrowUp,
+                down:  !!keys.KeyS || !!keys.ArrowDown,
+                left:  !!keys.KeyA || !!keys.ArrowLeft,
+                right: !!keys.KeyD || !!keys.ArrowRight,
+            });
+            netInputCounter = 0;
+        }
+    }
+
     updateCamera();
 
     // Figure out which building each player is inside (drives roof transparency
@@ -1387,79 +1741,77 @@ function gameLoop() {
     renderQueue.sort((a, b) => a.y - b.y);
     renderQueue.forEach(obj => obj.draw(ctx));
 
-    // Roofs: drawn after everything else. If any player is inside, fade to ~25% so the
-    // interior is visible.
+    // Roofs: drawn after everything else. When any player is inside, the roof
+    // is omitted entirely so the building reads as a clean top-down view of the
+    // interior (floor + walls + occupants).
     buildings.forEach(b => {
         const anyInside = players.some(p => p.insideBuilding === b);
-        b.drawRoof(ctx, anyInside ? 0.25 : 1.0);
+        b.drawRoof(ctx, anyInside ? 0 : 1.0);
     });
 
-    // Night / Lighting Pass (still inside the camera transform so gradients use world coords)
+    ctx.restore();
+
+    // Night / Lighting Pass — built on an offscreen canvas so the destination-out
+    // cutouts only erase the dark overlay, not the world rendering underneath.
+    // Cutout positions are converted to screen coords (world - camera).
     const nightAlpha = getNightOpacity();
-    if (nightAlpha > 0.001) {
-        ctx.fillStyle = `rgba(0, 0, 0, ${nightAlpha.toFixed(3)})`;
-        ctx.fillRect(camera.x, camera.y, canvas.width, canvas.height);
+    if (nightAlpha > 0.001 && nightLayerCtx) {
+        const nctx = nightLayerCtx;
+        nctx.clearRect(0, 0, nightLayer.width, nightLayer.height);
+        nctx.globalCompositeOperation = 'source-over';
+        nctx.fillStyle = `rgba(0, 0, 0, ${nightAlpha.toFixed(3)})`;
+        nctx.fillRect(0, 0, nightLayer.width, nightLayer.height);
 
-        ctx.globalCompositeOperation = 'destination-out';
+        nctx.globalCompositeOperation = 'destination-out';
 
-        // Wide daylight cutout around the campfire so the player can see themselves
-        // and the area around the fire at night.
+        // Campfire halo — clean daylight circle inside, dark outside.
         if (mainCampfire.active) {
-            const r = 320;
-            const g = ctx.createRadialGradient(mainCampfire.x, mainCampfire.y, 0, mainCampfire.x, mainCampfire.y, r);
+            const sx = mainCampfire.x - camera.x;
+            const sy = mainCampfire.y - camera.y;
+            const r = 360;
+            const g = nctx.createRadialGradient(sx, sy, 0, sx, sy, r);
             g.addColorStop(0,    'rgba(255,255,255,1)');
-            g.addColorStop(0.55, 'rgba(255,255,255,1)');
+            g.addColorStop(0.96, 'rgba(255,255,255,1)');
             g.addColorStop(1,    'rgba(255,255,255,0)');
-            ctx.fillStyle = g;
-            ctx.beginPath(); ctx.arc(mainCampfire.x, mainCampfire.y, r, 0, Math.PI * 2); ctx.fill();
+            nctx.fillStyle = g;
+            nctx.beginPath(); nctx.arc(sx, sy, r, 0, Math.PI * 2); nctx.fill();
         }
 
         // Shop & blueprint-shop lanterns
         for (const ent of entities) {
             if (!ent.active) continue;
             if (ent.type !== 'shop' && ent.type !== 'blueprint_shop') continue;
+            const sx = ent.x - camera.x;
+            const sy = ent.y - camera.y;
             const r = 150;
-            const g = ctx.createRadialGradient(ent.x, ent.y, 0, ent.x, ent.y, r);
-            g.addColorStop(0, 'rgba(255,255,255,1)');
-            g.addColorStop(0.55, 'rgba(255,255,255,0.85)');
-            g.addColorStop(1, 'rgba(255,255,255,0)');
-            ctx.fillStyle = g;
-            ctx.beginPath(); ctx.arc(ent.x, ent.y, r, 0, Math.PI * 2); ctx.fill();
-        }
-
-        // Player flashlight — bright enough to clearly see the player and their surroundings.
-        players.forEach(p => {
-            const r = 130;
-            const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
+            const g = nctx.createRadialGradient(sx, sy, 0, sx, sy, r);
             g.addColorStop(0,    'rgba(255,255,255,1)');
-            g.addColorStop(0.45, 'rgba(255,255,255,0.95)');
+            g.addColorStop(0.55, 'rgba(255,255,255,0.85)');
             g.addColorStop(1,    'rgba(255,255,255,0)');
-            ctx.fillStyle = g;
-            ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.fill();
-        });
-
-        ctx.globalCompositeOperation = 'source-over';
-
-        // Additive warm glow around the campfire — boosts brightness on top of the
-        // cleared-night area so the firelit zone visibly glows. Scaled with nightAlpha
-        // so it fades in/out with dusk/dawn instead of popping on.
-        if (mainCampfire.active) {
-            const flicker = Math.random() * 10;
-            const r = 280 + flicker;
-            ctx.globalCompositeOperation = 'lighter';
-            ctx.globalAlpha = Math.min(1, nightAlpha / NIGHT_MAX_ALPHA);
-            const g = ctx.createRadialGradient(mainCampfire.x, mainCampfire.y, 30, mainCampfire.x, mainCampfire.y, r);
-            g.addColorStop(0,   'rgba(255, 220, 150, 0.55)');
-            g.addColorStop(0.5, 'rgba(255, 175, 100, 0.28)');
-            g.addColorStop(1,   'rgba(255, 150, 80, 0)');
-            ctx.fillStyle = g;
-            ctx.beginPath(); ctx.arc(mainCampfire.x, mainCampfire.y, r, 0, Math.PI * 2); ctx.fill();
-            ctx.globalAlpha = 1;
-            ctx.globalCompositeOperation = 'source-over';
+            nctx.fillStyle = g;
+            nctx.beginPath(); nctx.arc(sx, sy, r, 0, Math.PI * 2); nctx.fill();
         }
-    }
 
-    ctx.restore();
+        // Player halo — clean daylight circle.
+        for (const p of players) {
+            const sx = p.x - camera.x;
+            const sy = p.y - camera.y;
+            const r = 220;
+            const g = nctx.createRadialGradient(sx, sy, 0, sx, sy, r);
+            g.addColorStop(0,    'rgba(255,255,255,1)');
+            g.addColorStop(0.96, 'rgba(255,255,255,1)');
+            g.addColorStop(1,    'rgba(255,255,255,0)');
+            nctx.fillStyle = g;
+            nctx.beginPath(); nctx.arc(sx, sy, r, 0, Math.PI * 2); nctx.fill();
+        }
+
+        nctx.globalCompositeOperation = 'source-over';
+
+        // Composite the prepared overlay onto the main canvas. Because the world
+        // was drawn first and isn't touched here, the halos reveal daytime
+        // visuals underneath rather than a black hole.
+        ctx.drawImage(nightLayer, 0, 0);
+    }
 
     updateUI();
     requestAnimationFrame(gameLoop);
