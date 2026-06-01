@@ -128,6 +128,20 @@
             display: none;
         }
         #bp-menu { border-color: #3498db; box-shadow: 0 0 25px rgba(52, 152, 219, 0.6); }
+        #npc-menu {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(20, 30, 20, 0.95);
+            border: 3px solid #2ecc71;
+            padding: 20px 30px;
+            border-radius: 10px;
+            color: white;
+            min-width: 360px;
+            z-index: 5;
+            box-shadow: 0 0 25px rgba(46, 204, 113, 0.55);
+            display: none;
+        }
         .shop-title { font-size: 24px; color: #f1c40f; text-align: center; margin-bottom: 12px; letter-spacing: 2px; }
         #shop-info { font-size: 14px; color: #bdc3c7; margin-bottom: 12px; border-bottom: 1px solid #555; padding-bottom: 10px; }
         .shop-opt { font-size: 16px; margin: 8px 0; color: #ecf0f1; }
@@ -176,6 +190,20 @@
         <div class="shop-opt" id="bp-opt-3">[3] Watch Tower</div>
         <div class="shop-opt" id="bp-opt-4">[4] Close</div>
         <div class="shop-hint">Press 1–4 or ESC. Buildings spawn next to you.</div>
+    </div>
+
+    <div id="npc-menu">
+        <div class="shop-title">HELPER</div>
+        <div id="npc-info"></div>
+        <div class="shop-opt" id="npc-opt-1">[1] Task: Chop trees</div>
+        <div class="shop-opt" id="npc-opt-2">[2] Task: Hunt animals</div>
+        <div class="shop-opt" id="npc-opt-3">[3] Task: Idle</div>
+        <div class="shop-opt" id="npc-opt-4">[4] Buy NPC Axe (20g)</div>
+        <div class="shop-opt" id="npc-opt-5">[5] Buy NPC Pickaxe (25g)</div>
+        <div class="shop-opt" id="npc-opt-6">[6] Buy NPC Sword (30g)</div>
+        <div class="shop-opt" id="npc-opt-7">[7] Collect 25% of earnings</div>
+        <div class="shop-opt" id="npc-opt-8">[8] Close</div>
+        <div class="shop-hint">Press 1–8 or ESC</div>
     </div>
 
     <button id="btn-pause" title="P">⏸ PAUSE</button>
@@ -399,6 +427,8 @@ function netBroadcastState() {
             cid: p.remoteClientId == null ? 0 : p.remoteClientId, // 0 = host's own player
         })),
         cows: cows.map(c => ({ x: c.x, y: c.y, hp: c.hp, maxHP: c.maxHP, active: c.active, hitFlash: c.hitFlash })),
+        zombies: zombies.map(z => ({ x: z.x, y: z.y, hp: z.hp, maxHP: z.maxHP, active: z.active, hitFlash: z.hitFlash })),
+        npcs: npcs.map(n => ({ x: n.x, y: n.y, hp: n.hp, maxHP: n.maxHP, active: n.active, name: n.name, task: n.task, tools: n.tools, earnings: n.earnings, faceDir: n.faceDir })),
         entities: entities.map(e => ({ x: e.x, y: e.y, t: e.type, a: e.active, cp: e.chopProgress || 0 })),
         buildings: buildings.map(b => ({ x: b.x, y: b.y, t: b.type, w: b.w, h: b.h })),
     });
@@ -434,6 +464,27 @@ function applyNetworkState(s) {
         return c;
     });
 
+    zombies = (s.zombies || []).map(zd => {
+        const z = new Zombie(zd.x, zd.y);
+        z.hp = zd.hp;
+        z.maxHP = zd.maxHP;
+        z.active = zd.active;
+        z.hitFlash = zd.hitFlash;
+        return z;
+    });
+
+    npcs = (s.npcs || []).map(nd => {
+        const n = new NPC(nd.x, nd.y, nd.name);
+        n.hp = nd.hp;
+        n.maxHP = nd.maxHP;
+        n.active = nd.active;
+        n.task = nd.task;
+        n.tools = nd.tools || { axe:false, pickaxe:false, sword:false };
+        n.earnings = nd.earnings || 0;
+        n.faceDir = nd.faceDir || 'down';
+        return n;
+    });
+
     entities = s.entities.map(ed => {
         const e = new Entity(ed.x, ed.y, ed.t);
         e.active = ed.a;
@@ -456,6 +507,8 @@ function startNetworkedGame() {
         // Client: empty world until first snapshot arrives.
         players = [];
         cows = [];
+        zombies = [];
+        npcs = [];
         entities = [];
         buildings = [];
         mainCampfire = new Campfire(WORLD_WIDTH / 2, WORLD_HEIGHT / 2);
@@ -481,7 +534,9 @@ const gameState = {
     tools: { axe: false, pickaxe: false, sword: false },
     shopOpen: false,
     blueprintShopOpen: false,
+    npcMenuOpen: false,
     paused: false,
+    caveOpenings: 0,
     message: "Find the shopkeeper!",
     messageTimer: 300,
     showMessage: function(msg) {
@@ -490,7 +545,7 @@ const gameState = {
     }
 };
 
-function isMenuOpen() { return gameState.shopOpen || gameState.blueprintShopOpen; }
+function isMenuOpen() { return gameState.shopOpen || gameState.blueprintShopOpen || gameState.npcMenuOpen; }
 
 function togglePause() {
     if (!gameRunning) return;
@@ -524,6 +579,8 @@ function exitToMenu() {
     gameState.paused = false;
     gameState.shopOpen = false;
     gameState.blueprintShopOpen = false;
+    gameState.npcMenuOpen = false;
+    gameState.caveOpenings = 0;
     document.getElementById('ui').style.display = 'none';
     document.getElementById('btn-pause').style.display = 'none';
     document.getElementById('btn-exit').style.display = 'none';
@@ -1009,37 +1066,111 @@ class Cow {
         ctx.save();
         ctx.translate(this.x, this.y);
 
+        const bodyColor   = this.hitFlash > 0 ? '#ff6666' : '#ecf0f1';
+        const patchColor  = this.hitFlash > 0 ? '#a83a3a' : '#5c4033';
+
         // Shadow
         ctx.fillStyle = 'rgba(0,0,0,0.35)';
         ctx.beginPath();
-        ctx.ellipse(0, 14, 22, 7, 0, 0, Math.PI * 2);
+        ctx.ellipse(0, 16, 26, 8, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Tail (drawn first so body covers its root)
+        ctx.strokeStyle = bodyColor;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(-19, -3);
+        ctx.quadraticCurveTo(-26, -2, -28, -10);
+        ctx.stroke();
+        ctx.fillStyle = patchColor;
+        ctx.beginPath();
+        ctx.arc(-28, -11, 3, 0, Math.PI * 2);
         ctx.fill();
 
         // Body
-        ctx.fillStyle = this.hitFlash > 0 ? '#ff6666' : '#ecf0f1';
+        ctx.fillStyle = bodyColor;
         ctx.beginPath();
-        ctx.ellipse(0, 0, 22, 14, 0, 0, Math.PI * 2);
+        ctx.ellipse(0, 0, 22, 13, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        // Spots
-        ctx.fillStyle = '#2c3e50';
-        ctx.beginPath(); ctx.arc(-8, -3, 5, 0, Math.PI * 2); ctx.fill();
-        ctx.beginPath(); ctx.arc(7, 4, 4, 0, Math.PI * 2); ctx.fill();
+        // Brown patches — irregular Holstein blotches
+        ctx.fillStyle = patchColor;
+        ctx.beginPath(); ctx.ellipse(-8, -3, 8, 5, 0.4, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(7, 4, 7, 4, -0.3, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(-3, 7, 4, 3, 0.2, 0, Math.PI * 2); ctx.fill();
+
+        // Udder under the back half of the body
+        ctx.fillStyle = '#f5a3a3';
+        ctx.beginPath();
+        ctx.ellipse(-4, 10, 6, 4, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#e88080';
+        ctx.beginPath(); ctx.arc(-7, 13, 0.9, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(-2, 13, 0.9, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(-4, 13.5, 0.9, 0, Math.PI * 2); ctx.fill();
+
+        // Legs (four, with darker hooves)
+        ctx.fillStyle = '#3a2820';
+        ctx.fillRect(-13, 9, 4, 9);
+        ctx.fillRect(-5, 10, 4, 9);
+        ctx.fillRect(6, 9, 4, 9);
+        ctx.fillRect(13, 10, 4, 9);
+        ctx.fillStyle = '#1a0f0a';
+        ctx.fillRect(-13, 16, 4, 2);
+        ctx.fillRect(-5, 17, 4, 2);
+        ctx.fillRect(6, 16, 4, 2);
+        ctx.fillRect(13, 17, 4, 2);
 
         // Head
-        ctx.fillStyle = this.hitFlash > 0 ? '#ff6666' : '#ecf0f1';
-        ctx.beginPath(); ctx.arc(18, -4, 8, 0, Math.PI * 2); ctx.fill();
-        // Nose
-        ctx.fillStyle = '#e8a0a0';
-        ctx.beginPath(); ctx.arc(23, -2, 3, 0, Math.PI * 2); ctx.fill();
-        // Eye
-        ctx.fillStyle = '#000';
-        ctx.beginPath(); ctx.arc(20, -7, 1.5, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = bodyColor;
+        ctx.beginPath();
+        ctx.ellipse(21, -3, 9, 7, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // Head patch around the eye
+        ctx.fillStyle = patchColor;
+        ctx.beginPath();
+        ctx.ellipse(22, -6, 5, 3, -0.4, 0, Math.PI * 2);
+        ctx.fill();
 
-        // Legs
-        ctx.fillStyle = '#2c3e50';
-        ctx.fillRect(-12, 8, 4, 8);
-        ctx.fillRect(8, 8, 4, 8);
+        // Horns (short curved nubs)
+        ctx.fillStyle = '#d4c39a';
+        ctx.beginPath();
+        ctx.ellipse(15, -8, 3, 1.5, 0.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(26, -8, 3, 1.5, -0.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Ears (one visible, jutting out the side)
+        ctx.fillStyle = bodyColor;
+        ctx.beginPath();
+        ctx.ellipse(13, -6, 3.5, 2, 0.8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#e8a0a0';
+        ctx.beginPath();
+        ctx.ellipse(13, -6, 1.5, 1, 0.8, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Snout
+        ctx.fillStyle = '#e8a0a0';
+        ctx.beginPath();
+        ctx.ellipse(28, -1, 4.5, 3.5, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#b97777';
+        ctx.lineWidth = 0.6;
+        ctx.beginPath();
+        ctx.ellipse(28, -1, 4.5, 3.5, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        // Nostrils
+        ctx.fillStyle = '#3a1f1f';
+        ctx.beginPath(); ctx.ellipse(29, -2, 0.9, 0.6, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(29, 0,  0.9, 0.6, 0, 0, Math.PI * 2); ctx.fill();
+
+        // Eye
+        ctx.fillStyle = '#fff';
+        ctx.beginPath(); ctx.arc(22, -6, 1.8, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#000';
+        ctx.beginPath(); ctx.arc(22.3, -5.8, 1.1, 0, Math.PI * 2); ctx.fill();
 
         // HP bar (only if damaged)
         if (this.hp < this.maxHP) {
@@ -1047,6 +1178,339 @@ class Cow {
             ctx.fillRect(-15, -22, 30, 4);
             ctx.fillStyle = '#e74c3c';
             ctx.fillRect(-15, -22, 30 * (this.hp / this.maxHP), 4);
+        }
+        ctx.restore();
+    }
+}
+
+class Zombie {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.maxHP = 40;
+        this.hp = this.maxHP;
+        this.active = true;
+        this.speed = 0.9; // shamble
+        this.attackDamage = 10;
+        this.attackRange = 32;
+        this.attackCooldown = 0;
+        this.hitFlash = 0;
+        this.goldDropped = 0;
+        this.shamble = Math.random() * Math.PI * 2; // phase for the walking sway
+    }
+
+    update() {
+        if (!this.active) return;
+        if (this.hitFlash > 0) this.hitFlash--;
+        if (this.attackCooldown > 0) this.attackCooldown--;
+        this.shamble += 0.12;
+
+        // Nearest living player target
+        let target = null, bestDist = Infinity;
+        for (const p of players) {
+            if (p.hp <= 0) continue;
+            const d = Math.hypot(this.x - p.x, this.y - p.y);
+            if (d < bestDist) { target = p; bestDist = d; }
+        }
+        if (!target) return;
+
+        if (bestDist > this.attackRange) {
+            const dx = target.x - this.x;
+            const dy = target.y - this.y;
+            const dist = Math.max(0.001, Math.hypot(dx, dy));
+            // Sway slightly side-to-side for that shambling look.
+            const swayX = -dy / dist * Math.sin(this.shamble) * 0.4;
+            const swayY =  dx / dist * Math.sin(this.shamble) * 0.4;
+            this.x += (dx / dist) * this.speed + swayX;
+            this.y += (dy / dist) * this.speed + swayY;
+        } else if (this.attackCooldown === 0) {
+            target.damage(this.attackDamage);
+            this.attackCooldown = 50;
+            gameState.showMessage(`A zombie clawed ${target.name}! (-${this.attackDamage} HP)`);
+        }
+
+        this.x = Math.max(20, Math.min(WORLD_WIDTH - 20, this.x));
+        this.y = Math.max(20, Math.min(WORLD_HEIGHT - 20, this.y));
+    }
+
+    takeHit(damage) {
+        this.hp -= damage;
+        this.hitFlash = 10;
+        if (this.hp <= 0) {
+            this.active = false;
+            this.goldDropped = 5 + Math.floor(Math.random() * 10); // 5..14
+            gameState.gold += this.goldDropped;
+            return true;
+        }
+        return false;
+    }
+
+    draw(ctx) {
+        if (!this.active) return;
+        ctx.save();
+        ctx.translate(this.x, this.y);
+
+        const skin   = this.hitFlash > 0 ? '#ff6666' : '#7a9a4a';
+        const skinSh = this.hitFlash > 0 ? '#aa4444' : '#577033';
+
+        // Shadow
+        ctx.fillStyle = 'rgba(0,0,0,0.4)';
+        ctx.beginPath(); ctx.ellipse(0, 17, 14, 5, 0, 0, Math.PI * 2); ctx.fill();
+
+        // Tattered pants
+        ctx.fillStyle = '#3d3a36';
+        ctx.fillRect(-8, 8, 16, 10);
+        ctx.fillStyle = '#1f1d1a';
+        ctx.fillRect(-8, 16, 4, 3);
+        ctx.fillRect(2, 17, 4, 2);
+        ctx.fillRect(-1, 17, 2, 2);
+
+        // Torso (greenish skin tone, ragged shirt)
+        ctx.fillStyle = skin;
+        ctx.fillRect(-10, -5, 20, 13);
+        // Ragged shirt patches
+        ctx.fillStyle = '#5c4033';
+        ctx.fillRect(-10, -5, 20, 5);
+        ctx.fillRect(-10, 4, 7, 4);
+        ctx.fillRect(4, 5, 6, 3);
+        // Stitched scar
+        ctx.strokeStyle = '#3a2820';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(-4, 2); ctx.lineTo(6, 6); ctx.stroke();
+
+        // Outstretched arms (zombie pose)
+        ctx.fillStyle = skin;
+        ctx.fillRect(-17, -3, 7, 5);
+        ctx.fillRect(10, -3, 7, 5);
+        // Hands
+        ctx.fillStyle = skinSh;
+        ctx.beginPath(); ctx.arc(-18, 0, 3, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(18, 0, 3, 0, Math.PI * 2); ctx.fill();
+        // Bony fingers
+        ctx.fillStyle = '#1a0f0a';
+        ctx.fillRect(-21, -1, 3, 1);
+        ctx.fillRect(-21, 1, 3, 1);
+        ctx.fillRect(18, -1, 3, 1);
+        ctx.fillRect(18, 1, 3, 1);
+
+        // Head
+        ctx.fillStyle = skin;
+        ctx.beginPath(); ctx.arc(0, -13, 8, 0, Math.PI * 2); ctx.fill();
+        // Hair tufts
+        ctx.fillStyle = '#2a1d12';
+        ctx.beginPath(); ctx.arc(-4, -19, 2, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(3, -19, 1.6, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(-6, -16, 1.2, 0, Math.PI * 2); ctx.fill();
+        // Sunken eye sockets
+        ctx.fillStyle = '#1a0f0a';
+        ctx.beginPath(); ctx.arc(-3, -13, 2.2, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(3,  -13, 2.2, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#ffe066';
+        ctx.beginPath(); ctx.arc(-3, -13, 0.9, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(3,  -13, 0.9, 0, Math.PI * 2); ctx.fill();
+        // Drooling mouth
+        ctx.fillStyle = '#3a1f1f';
+        ctx.fillRect(-3, -9, 6, 3);
+        ctx.fillStyle = '#fce6a0';
+        ctx.fillRect(-2, -9, 1, 2);
+        ctx.fillRect(0,  -9, 1, 2);
+        ctx.fillRect(2,  -9, 1, 2);
+
+        // HP bar
+        if (this.hp < this.maxHP) {
+            ctx.fillStyle = '#000';
+            ctx.fillRect(-15, -28, 30, 4);
+            ctx.fillStyle = '#e74c3c';
+            ctx.fillRect(-15, -28, 30 * (this.hp / this.maxHP), 4);
+        }
+        ctx.restore();
+    }
+}
+
+class NPC {
+    constructor(x, y, name) {
+        this.x = x;
+        this.y = y;
+        this.name = name;
+        this.maxHP = 60;
+        this.hp = this.maxHP;
+        this.active = true;
+        this.speed = 1.6;
+        this.task = 'idle';                // 'idle' | 'chop' | 'hunt'
+        this.tools = { axe: false, pickaxe: false, sword: false };
+        this.earnings = 0;                 // gold the NPC has accumulated
+        this.target = null;                // current tree / cow
+        this.workTimer = 0;
+        this.hitFlash = 0;
+        this.faceDir = 'down';
+    }
+
+    update() {
+        if (!this.active) return;
+        if (this.hitFlash > 0) this.hitFlash--;
+
+        if (this.task === 'chop' && this.tools.axe) this._workOnTree();
+        else if (this.task === 'hunt' && this.tools.sword) this._workOnCow();
+        // else: idle, just stand around
+    }
+
+    _moveToward(tx, ty, arriveDist) {
+        const dx = tx - this.x;
+        const dy = ty - this.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist <= arriveDist) return true;
+        this.x += (dx / dist) * this.speed;
+        this.y += (dy / dist) * this.speed;
+        if (Math.abs(dx) > Math.abs(dy)) this.faceDir = dx > 0 ? 'right' : 'left';
+        else                              this.faceDir = dy > 0 ? 'down' : 'up';
+        return false;
+    }
+
+    _workOnTree() {
+        if (this.workTimer > 0) { this.workTimer--; return; }
+        if (!this.target || !this.target.active || this.target.type !== 'tree') {
+            let nearest = null, best = Infinity;
+            for (const e of entities) {
+                if (!e.active || e.type !== 'tree') continue;
+                const d = Math.hypot(this.x - e.x, this.y - e.y);
+                if (d < best) { nearest = e; best = d; }
+            }
+            this.target = nearest;
+        }
+        if (!this.target) return;
+        if (this._moveToward(this.target.x, this.target.y, 30)) {
+            this.target.active = false;
+            this.target.respawnDay = gameState.day + 1;
+            this.target.chopProgress = 0;
+            this.earnings += 35; // 7 wood × 5g (NPC sells immediately at the shop rate)
+            this.target = null;
+            this.workTimer = 60;
+        }
+    }
+
+    _workOnCow() {
+        if (this.workTimer > 0) { this.workTimer--; return; }
+        if (!this.target || !this.target.active) {
+            let nearest = null, best = Infinity;
+            for (const c of cows) {
+                if (!c.active) continue;
+                const d = Math.hypot(this.x - c.x, this.y - c.y);
+                if (d < best) { nearest = c; best = d; }
+            }
+            this.target = nearest;
+        }
+        if (!this.target) return;
+        if (this._moveToward(this.target.x, this.target.y, 28)) {
+            const killed = this.target.takeHit(20); // sword damage
+            if (killed) {
+                this.earnings += 25; // 2 raw meat sells for ~25g (handwave)
+                this.target = null;
+                this.workTimer = 80;
+            } else {
+                this.workTimer = 30;
+            }
+        }
+    }
+
+    takeHit(damage) {
+        this.hp -= damage;
+        this.hitFlash = 8;
+        if (this.hp <= 0) {
+            this.active = false;
+            return true;
+        }
+        return false;
+    }
+
+    collectShare() {
+        // Player takes 25% of the NPC's current earnings; the NPC keeps the rest.
+        const share = Math.floor(this.earnings * 0.25);
+        if (share <= 0) return 0;
+        gameState.gold += share;
+        this.earnings -= share;
+        return share;
+    }
+
+    draw(ctx) {
+        if (!this.active) return;
+        ctx.save();
+        ctx.translate(this.x, this.y);
+
+        // Shadow
+        ctx.fillStyle = 'rgba(0,0,0,0.3)';
+        ctx.beginPath(); ctx.ellipse(0, 15, 12, 6, 0, 0, Math.PI * 2); ctx.fill();
+
+        // Torso (orange shirt so they read distinctly from the players & zombies)
+        ctx.fillStyle = this.hitFlash > 0 ? '#ff6666' : '#d35400';
+        ctx.fillRect(-10, -10, 20, 20);
+        // Belt
+        ctx.fillStyle = '#3a2820';
+        ctx.fillRect(-10, 9, 20, 2);
+        // Pants
+        ctx.fillStyle = '#5c4033';
+        ctx.fillRect(-10, 10, 20, 8);
+
+        // Head
+        ctx.fillStyle = '#f1c27d';
+        ctx.beginPath(); ctx.arc(0, -15, 10, 0, Math.PI * 2); ctx.fill();
+        // Straw hat
+        ctx.fillStyle = '#c9a35a';
+        ctx.beginPath(); ctx.ellipse(0, -22, 14, 3, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(-8, -22); ctx.lineTo(8, -22); ctx.lineTo(0, -30); ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#8b5e2a';
+        ctx.fillRect(-8, -23, 16, 2);
+
+        // Eyes + smile
+        ctx.fillStyle = '#000';
+        ctx.beginPath(); ctx.arc(-3, -15, 1.2, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(3,  -15, 1.2, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(0, -11, 2.5, 0.2, Math.PI - 0.2);
+        ctx.stroke();
+
+        // Held tool on the side
+        const handX = this.faceDir === 'left' ? -14 : 14;
+        if (this.tools.axe || this.task === 'chop') {
+            ctx.fillStyle = '#5c4033';
+            ctx.fillRect(handX - 1, -6, 2, 14);
+            ctx.fillStyle = '#bdc3c7';
+            ctx.fillRect(handX - 5, -8, 10, 5);
+        } else if (this.tools.sword || this.task === 'hunt') {
+            ctx.fillStyle = '#bdc3c7';
+            ctx.fillRect(handX - 1, -10, 2, 14);
+            ctx.fillStyle = '#5c4033';
+            ctx.fillRect(handX - 3, 4, 6, 2);
+        } else if (this.tools.pickaxe) {
+            ctx.fillStyle = '#5c4033';
+            ctx.fillRect(handX - 1, -5, 2, 12);
+            ctx.fillStyle = '#bdc3c7';
+            ctx.beginPath();
+            ctx.moveTo(handX - 7, -7); ctx.lineTo(handX + 7, -7);
+            ctx.lineTo(handX + 5, -4); ctx.lineTo(handX - 5, -4);
+            ctx.closePath(); ctx.fill();
+        }
+
+        // Nameplate + task badge
+        ctx.fillStyle = '#2ecc71';
+        ctx.font = 'bold 10px Courier';
+        ctx.textAlign = 'center';
+        ctx.fillText(this.name, 0, -33);
+        if (this.task !== 'idle') {
+            ctx.fillStyle = '#f1c40f';
+            ctx.font = '9px Courier';
+            ctx.fillText(`[${this.task}]`, 0, -45);
+        }
+
+        // HP bar (only if damaged)
+        if (this.hp < this.maxHP) {
+            ctx.fillStyle = '#000';
+            ctx.fillRect(-15, -53, 30, 3);
+            ctx.fillStyle = '#2ecc71';
+            ctx.fillRect(-15, -53, 30 * (this.hp / this.maxHP), 3);
         }
         ctx.restore();
     }
@@ -1190,8 +1654,13 @@ class Building {
 let players = [];
 let entities = [];
 let cows = [];
+let zombies = [];
+let npcs = [];
 let buildings = [];
 let mainCampfire;
+let prevCaveOpen = false;       // edge-detect cave open transitions for wave spawning
+const MAX_WAVE = 12;            // cap on zombies per wave
+const NPC_EVERY = 5;            // every Nth cave opening yields an NPC
 
 // Offscreen canvas used for the night overlay so we can punch halo holes in it
 // without also erasing the world that was already rendered on the main canvas.
@@ -1220,6 +1689,9 @@ function initWorld() {
 
     mainCampfire = new Campfire(cx, cy + 120);
     buildings = [];
+    zombies = [];
+    npcs = [];
+    prevCaveOpen = false;
 
     // --- Hand-placed landmarks + scattered forests ---
     entities = [
@@ -1325,18 +1797,41 @@ function checkInteractions() {
 
         const held = player.getHeldItem();
 
-        // 2) Attack nearest cow in range
-        let closestCow = null, closestCowDist = Infinity;
-        for (const cow of cows) {
-            if (!cow.active) continue;
-            const d = Math.hypot(player.x - cow.x, player.y - cow.y);
-            if (d < 55 && d < closestCowDist) { closestCow = cow; closestCowDist = d; }
+        // 1.5) NPC interaction — opens an NPC management menu.
+        for (const n of npcs) {
+            if (!n.active) continue;
+            if (Math.hypot(player.x - n.x, player.y - n.y) < 60) {
+                openNPCMenu(player, n);
+                didSomething = true;
+                break;
+            }
         }
-        if (closestCow) {
+        if (didSomething) return;
+
+        // 2) Attack the nearest enemy in range — zombies take priority over cows.
+        let target = null, targetKind = null, targetDist = Infinity;
+        for (const z of zombies) {
+            if (!z.active) continue;
+            const d = Math.hypot(player.x - z.x, player.y - z.y);
+            if (d < 55 && d < targetDist) { target = z; targetDist = d; targetKind = 'zombie'; }
+        }
+        if (!target) {
+            for (const cow of cows) {
+                if (!cow.active) continue;
+                const d = Math.hypot(player.x - cow.x, player.y - cow.y);
+                if (d < 55 && d < targetDist) { target = cow; targetDist = d; targetKind = 'cow'; }
+            }
+        }
+        if (target) {
             const dmg = held === 'sword' ? 20 : 5;
-            const killed = closestCow.takeHit(dmg);
-            if (killed) gameState.showMessage(`${player.name} killed a cow (+2 raw meat).`);
-            else gameState.showMessage(`${player.name} hit cow for ${dmg}${held === 'sword' ? '' : ' — hold sword for more damage'}.`);
+            const killed = target.takeHit(dmg);
+            if (targetKind === 'zombie') {
+                if (killed) gameState.showMessage(`${player.name} slew a zombie (+${target.goldDropped}g).`);
+                else gameState.showMessage(`${player.name} hit zombie for ${dmg}${held === 'sword' ? '' : ' — hold sword for more damage'}.`);
+            } else {
+                if (killed) gameState.showMessage(`${player.name} killed a cow (+2 raw meat).`);
+                else gameState.showMessage(`${player.name} hit cow for ${dmg}${held === 'sword' ? '' : ' — hold sword for more damage'}.`);
+            }
             return;
         }
 
@@ -1521,6 +2016,15 @@ window.addEventListener('keydown', e => {
         else if (e.code === 'Digit2' || e.code === 'Numpad2') buyBlueprint('stone_cottage');
         else if (e.code === 'Digit3' || e.code === 'Numpad3') buyBlueprint('watch_tower');
         else if (e.code === 'Digit4' || e.code === 'Numpad4' || e.code === 'Escape') closeBlueprintShop();
+    } else if (gameState.npcMenuOpen) {
+        if (e.code === 'Digit1' || e.code === 'Numpad1') npcSetTask('chop');
+        else if (e.code === 'Digit2' || e.code === 'Numpad2') npcSetTask('hunt');
+        else if (e.code === 'Digit3' || e.code === 'Numpad3') npcSetTask('idle');
+        else if (e.code === 'Digit4' || e.code === 'Numpad4') npcBuyTool('axe',     20);
+        else if (e.code === 'Digit5' || e.code === 'Numpad5') npcBuyTool('pickaxe', 25);
+        else if (e.code === 'Digit6' || e.code === 'Numpad6') npcBuyTool('sword',   30);
+        else if (e.code === 'Digit7' || e.code === 'Numpad7') npcCollectShare();
+        else if (e.code === 'Digit8' || e.code === 'Numpad8' || e.code === 'Escape') closeNPCMenu();
     }
 });
 
@@ -1566,6 +2070,96 @@ function refreshBlueprintMenu() {
     setBpOpt('bp-opt-2', 'stone_cottage');
     setBpOpt('bp-opt-3', 'watch_tower');
     document.getElementById('bp-opt-4').textContent = '[4] Close';
+}
+
+// --- NPC MENU ---
+function openNPCMenu(player, npc) {
+    if (isMenuOpen()) return;
+    gameState.npcMenuOpen = true;
+    gameState.activeNPC = npc;
+    gameState.npcBuyer = player;
+    refreshNPCMenu();
+    document.getElementById('npc-menu').style.display = 'block';
+}
+
+function closeNPCMenu() {
+    gameState.npcMenuOpen = false;
+    gameState.activeNPC = null;
+    document.getElementById('npc-menu').style.display = 'none';
+}
+
+function refreshNPCMenu() {
+    const npc = gameState.activeNPC;
+    if (!npc) return;
+    const ownsAxe   = npc.tools.axe;
+    const ownsPick  = npc.tools.pickaxe;
+    const ownsSword = npc.tools.sword;
+    const share = Math.floor(npc.earnings * 0.25);
+    document.getElementById('npc-info').innerHTML =
+        `<b>${npc.name}</b> &nbsp; <i>Task: ${npc.task}</i><br>` +
+        `Tools: ${[ownsAxe?'axe':'', ownsPick?'pickaxe':'', ownsSword?'sword':''].filter(Boolean).join(', ') || '(none)'}<br>` +
+        `${SPRITES.gold} ${gameState.gold} &nbsp;|&nbsp; NPC earnings: ${npc.earnings}g (your cut: ${share}g)`;
+
+    const setTask = (id, label, requires) => {
+        const el = document.getElementById(id);
+        el.textContent = label;
+        el.classList.toggle('dim', requires && !npc.tools[requires]);
+    };
+    setTask('npc-opt-1', '[1] Task: Chop trees (needs axe)',  'axe');
+    setTask('npc-opt-2', '[2] Task: Hunt animals (needs sword)', 'sword');
+    document.getElementById('npc-opt-3').textContent = '[3] Task: Idle';
+
+    const setBuy = (id, key, label, price) => {
+        const el = document.getElementById(id);
+        if (npc.tools[key]) {
+            el.textContent = `${label} — OWNED`;
+            el.classList.add('dim');
+        } else {
+            el.textContent = `${label} — ${price}g`;
+            el.classList.toggle('dim', gameState.gold < price);
+        }
+    };
+    setBuy('npc-opt-4', 'axe',     '[4] Buy NPC Axe',     20);
+    setBuy('npc-opt-5', 'pickaxe', '[5] Buy NPC Pickaxe', 25);
+    setBuy('npc-opt-6', 'sword',   '[6] Buy NPC Sword',   30);
+
+    const opt7 = document.getElementById('npc-opt-7');
+    opt7.textContent = `[7] Collect 25% of earnings (${share}g)`;
+    opt7.classList.toggle('dim', share <= 0);
+
+    document.getElementById('npc-opt-8').textContent = '[8] Close';
+}
+
+function npcSetTask(task) {
+    const npc = gameState.activeNPC;
+    if (!npc) return;
+    if (task === 'chop' && !npc.tools.axe)   { gameState.showMessage(`${npc.name} needs an axe to chop.`); return; }
+    if (task === 'hunt' && !npc.tools.sword) { gameState.showMessage(`${npc.name} needs a sword to hunt.`); return; }
+    npc.task = task;
+    npc.target = null;
+    npc.workTimer = 0;
+    gameState.showMessage(`${npc.name} now ${task === 'idle' ? 'standing idle' : task === 'chop' ? 'chopping trees' : 'hunting animals'}.`);
+    refreshNPCMenu();
+}
+
+function npcBuyTool(toolKey, price) {
+    const npc = gameState.activeNPC;
+    if (!npc) return;
+    if (npc.tools[toolKey]) { gameState.showMessage(`${npc.name} already has a ${toolKey}.`); return; }
+    if (gameState.gold < price) { gameState.showMessage(`Not enough gold (need ${price}g).`); return; }
+    gameState.gold -= price;
+    npc.tools[toolKey] = true;
+    gameState.showMessage(`Bought a ${toolKey} for ${npc.name}.`);
+    refreshNPCMenu();
+}
+
+function npcCollectShare() {
+    const npc = gameState.activeNPC;
+    if (!npc) return;
+    const got = npc.collectShare();
+    if (got > 0) gameState.showMessage(`Collected ${got}g from ${npc.name}.`);
+    else gameState.showMessage(`${npc.name} has nothing to share yet.`);
+    refreshNPCMenu();
 }
 
 function buyBlueprint(key) {
@@ -1660,6 +2254,38 @@ function gameLoop() {
         mainCampfire.update();
         players.forEach(p => p.update());
         cows.forEach(c => c.update());
+        zombies.forEach(z => z.update());
+        npcs.forEach(n => n.update());
+
+        // Cave opening waves: each time the cave transitions from closed to
+        // open, spawn a wave of zombies. First opening = 2 zombies, then +1
+        // each subsequent opening (capped at MAX_WAVE). Every NPC_EVERY-th
+        // opening also spawns a friendly NPC near the campfire.
+        const caveOpenNow = isCaveOpen();
+        if (caveOpenNow && !prevCaveOpen) {
+            gameState.caveOpenings++;
+            const waveSize = Math.min(MAX_WAVE, 1 + gameState.caveOpenings);
+            const cave = entities.find(e => e.type === 'cave' && e.active);
+            if (cave) {
+                for (let i = 0; i < waveSize; i++) {
+                    const ox = (Math.random() - 0.5) * 80;
+                    const oy = 30 + Math.random() * 30;
+                    zombies.push(new Zombie(cave.x + ox, cave.y + oy));
+                }
+                gameState.showMessage(`Cave opens (#${gameState.caveOpenings}) — ${waveSize} zombies emerge!`);
+            }
+            if (gameState.caveOpenings % NPC_EVERY === 0) {
+                const npcName = `Helper ${npcs.length + 1}`;
+                const nx = mainCampfire.x + (Math.random() - 0.5) * 120;
+                const ny = mainCampfire.y + 80 + Math.random() * 40;
+                npcs.push(new NPC(nx, ny, npcName));
+                gameState.showMessage(`A wanderer joined your camp: ${npcName}!`);
+            }
+        }
+        prevCaveOpen = caveOpenNow;
+        // Trim dead zombies so the list doesn't grow forever.
+        zombies = zombies.filter(z => z.active);
+        npcs = npcs.filter(n => n.active);
 
         // Tree/rock regrowth
         for (const ent of entities) {
@@ -1731,6 +2357,8 @@ function gameLoop() {
     const renderQueue = [
         ...entities.filter(e => e.active).map(e => ({ y: e.y, draw: c => e.draw(c) })),
         ...cows.filter(c => c.active).map(c => ({ y: c.y, draw: cx => c.draw(cx) })),
+        ...zombies.filter(z => z.active).map(z => ({ y: z.y, draw: cx => z.draw(cx) })),
+        ...npcs.filter(n => n.active).map(n => ({ y: n.y, draw: cx => n.draw(cx) })),
         ...buildings.map(b => ({ y: b.y, draw: c => b.drawBase(c) })),
         ...players.map(p => ({
             y: p.insideBuilding ? p.insideBuilding.y + 0.5 : p.y,
