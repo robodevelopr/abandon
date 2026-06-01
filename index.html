@@ -440,6 +440,8 @@ function netBroadcastState() {
             rawMeat: gameState.rawMeat, cookedMeat: gameState.cookedMeat,
             tools: gameState.tools,
             message: gameState.message, messageTimer: gameState.messageTimer,
+            encounters: gameState.encounters || 0,
+            zombiesKilledTonight: gameState.zombiesKilledTonight || 0,
         },
         fire: { x: mainCampfire.x, y: mainCampfire.y, active: mainCampfire.active, currentFuel: mainCampfire.currentFuel },
         players: players.map(p => ({
@@ -558,6 +560,8 @@ const gameState = {
     npcMenuOpen: false,
     paused: false,
     caveOpenings: 0,
+    encounters: 0,          // nights where you killed at least one zombie
+    zombiesKilledTonight: 0,
     message: "Find the shopkeeper!",
     messageTimer: 300,
     showMessage: function(msg) {
@@ -602,6 +606,8 @@ function exitToMenu() {
     gameState.blueprintShopOpen = false;
     gameState.npcMenuOpen = false;
     gameState.caveOpenings = 0;
+    gameState.encounters = 0;
+    gameState.zombiesKilledTonight = 0;
     document.getElementById('ui').style.display = 'none';
     document.getElementById('btn-pause').style.display = 'none';
     document.getElementById('btn-exit').style.display = 'none';
@@ -654,8 +660,11 @@ function saveGame() {
             cookedMeat: gameState.cookedMeat,
             tools: { ...gameState.tools },
             caveOpenings: gameState.caveOpenings || 0,
+            encounters: gameState.encounters || 0,
+            zombiesKilledTonight: gameState.zombiesKilledTonight || 0,
         },
         prevCaveOpen,
+        prevNight,
         fire: {
             x: mainCampfire.x, y: mainCampfire.y,
             currentFuel: mainCampfire.currentFuel, active: mainCampfire.active,
@@ -731,6 +740,7 @@ function loadGame() {
     gameState.npcMenuOpen = false;
     gameState.paused = false;
     prevCaveOpen = !!snap.prevCaveOpen;
+    prevNight = !!snap.prevNight;
 
     mainCampfire = new Campfire(snap.fire.x, snap.fire.y);
     mainCampfire.currentFuel = snap.fire.currentFuel;
@@ -869,6 +879,9 @@ class Player {
             left:  !!keys[this.controls.left],
             right: !!keys[this.controls.right],
         };
+        const prevX = this.x;
+        const prevY = this.y;
+
         if (inp.up)    { this.y -= this.speed; this.direction = 'up'; }
         if (inp.down)  { this.y += this.speed; this.direction = 'down'; }
         if (inp.left)  { this.x -= this.speed; this.direction = 'left'; }
@@ -876,6 +889,17 @@ class Player {
 
         this.x = Math.max(15, Math.min(WORLD_WIDTH - 15, this.x));
         this.y = Math.max(15, Math.min(WORLD_HEIGHT - 15, this.y));
+
+        // Building wall collision: doors are the only opening, so any motion
+        // that puts the player inside a wall rect is reverted axis-by-axis to
+        // let them slide along the wall.
+        const radius = 9;
+        for (const b of buildings) {
+            if (!b.collides(this.x, this.y, radius)) continue;
+            if (!b.collides(prevX, this.y, radius))      this.x = prevX;
+            else if (!b.collides(this.x, prevY, radius)) this.y = prevY;
+            else { this.x = prevX; this.y = prevY; }
+        }
     }
 
     damage(amount) {
@@ -1407,8 +1431,18 @@ class Zombie {
             // Sway slightly side-to-side for that shambling look.
             const swayX = -dy / dist * Math.sin(this.shamble) * 0.4;
             const swayY =  dx / dist * Math.sin(this.shamble) * 0.4;
+            const prevX = this.x, prevY = this.y;
             this.x += (dx / dist) * this.speed + swayX;
             this.y += (dy / dist) * this.speed + swayY;
+            // Wall collide so zombies can't phase through buildings — making
+            // them an actual shelter.
+            const radius = 10;
+            for (const b of buildings) {
+                if (!b.collides(this.x, this.y, radius)) continue;
+                if (!b.collides(prevX, this.y, radius))      this.x = prevX;
+                else if (!b.collides(this.x, prevY, radius)) this.y = prevY;
+                else { this.x = prevX; this.y = prevY; }
+            }
         } else if (this.attackCooldown === 0) {
             target.damage(this.attackDamage);
             this.attackCooldown = 50;
@@ -1426,6 +1460,7 @@ class Zombie {
             this.active = false;
             this.goldDropped = 5 + Math.floor(Math.random() * 10); // 5..14
             gameState.gold += this.goldDropped;
+            gameState.zombiesKilledTonight = (gameState.zombiesKilledTonight || 0) + 1;
             return true;
         }
         return false;
@@ -1714,6 +1749,35 @@ class Building {
         return p.x > this.x - this.w / 2 && p.x < this.x + this.w / 2
             && p.y > this.y - this.h / 2 && p.y < this.y + this.h / 2;
     }
+
+    // Wall rectangles in local (building-center) coords. Bottom wall has a
+    // doorway gap centered on x=0 so the player has to walk through the door
+    // to enter or leave.
+    walls() {
+        const halfW = this.w / 2, halfH = this.h / 2;
+        const thick = 6;          // wall thickness
+        const doorHalf = 11;      // half-width of the door opening
+        return [
+            { x1: -halfW,         y1: -halfH,          x2:  halfW,         y2: -halfH + thick }, // top
+            { x1: -halfW,         y1: -halfH + thick,  x2: -halfW + thick, y2:  halfH - thick }, // left
+            { x1:  halfW - thick, y1: -halfH + thick,  x2:  halfW,         y2:  halfH - thick }, // right
+            { x1: -halfW,         y1:  halfH - thick,  x2: -doorHalf,      y2:  halfH },         // bottom-left
+            { x1:  doorHalf,      y1:  halfH - thick,  x2:  halfW,         y2:  halfH },         // bottom-right
+        ];
+    }
+
+    // True if a circle (px, py, radius) overlaps any wall rect.
+    collides(px, py, radius) {
+        const lx = px - this.x;
+        const ly = py - this.y;
+        for (const w of this.walls()) {
+            if (lx + radius > w.x1 && lx - radius < w.x2 &&
+                ly + radius > w.y1 && ly - radius < w.y2) {
+                return true;
+            }
+        }
+        return false;
+    }
     drawBase(ctx) {
         ctx.save();
         ctx.translate(this.x, this.y);
@@ -1845,6 +1909,7 @@ let npcs = [];
 let buildings = [];
 let mainCampfire;
 let prevCaveOpen = false;       // edge-detect cave open transitions for wave spawning
+let prevNight = false;          // edge-detect night→day transitions for encounter counter
 const MAX_WAVE = 12;            // cap on zombies per wave
 const NPC_EVERY = 5;            // every Nth cave opening yields an NPC
 
@@ -1878,6 +1943,7 @@ function initWorld() {
     zombies = [];
     npcs = [];
     prevCaveOpen = false;
+    prevNight = false;
 
     // --- Hand-placed landmarks + scattered forests ---
     entities = [
@@ -2374,7 +2440,9 @@ function updateUI() {
     const hours = Math.floor(gameState.time / 60).toString().padStart(2, '0');
     const minutes = Math.floor(gameState.time % 60).toString().padStart(2, '0');
     
-    document.getElementById('ui-day').innerHTML = `${SPRITES.clock} Day ${gameState.day} — ${hours}:${minutes}`;
+    document.getElementById('ui-day').innerHTML =
+        `${SPRITES.clock} Day ${gameState.day} — ${hours}:${minutes}` +
+        `<span class="sep">|</span>⚔ Encounters: ${gameState.encounters || 0}`;
     document.getElementById('ui-resources').innerHTML =
         `${SPRITES.wood} ${gameState.wood}<span class="sep">|</span>` +
         `${SPRITES.stone} ${gameState.stone}<span class="sep">|</span>` +
@@ -2469,6 +2537,21 @@ function gameLoop() {
             }
         }
         prevCaveOpen = caveOpenNow;
+
+        // Encounter counter: count a "monster encounter" each time night ends
+        // (06:00 transition) if at least one zombie was killed during the night.
+        // Per-kill tally resets at the start of each night.
+        const nightNow = isNightTime();
+        if (nightNow && !prevNight) {
+            gameState.zombiesKilledTonight = 0;
+        } else if (!nightNow && prevNight) {
+            if ((gameState.zombiesKilledTonight || 0) > 0) {
+                gameState.encounters = (gameState.encounters || 0) + 1;
+                gameState.showMessage(`Encounter #${gameState.encounters} survived — ${gameState.zombiesKilledTonight} zombies down.`);
+            }
+        }
+        prevNight = nightNow;
+
         // Trim dead zombies so the list doesn't grow forever.
         zombies = zombies.filter(z => z.active);
         npcs = npcs.filter(n => n.active);
