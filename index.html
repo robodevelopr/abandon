@@ -30,6 +30,41 @@
             box-shadow: 0 4px 6px rgba(0,0,0,0.5);
         }
         .ui-stat { margin: 5px 0; font-size: 16px; font-weight: bold; }
+        .ui-stat svg, .shop-opt svg, #shop-info svg { vertical-align: -3px; margin: 0 3px; }
+        .ui-stat .sep, .shop-opt .sep { color: #555; margin: 0 4px; }
+
+        /* Pause */
+        #btn-pause {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 6;
+            display: none;
+            background: rgba(0, 0, 0, 0.75);
+            color: #ecf0f1;
+            border: 2px solid #444;
+            padding: 8px 18px;
+            font-family: inherit;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 5px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.5);
+        }
+        #btn-pause:hover { background: rgba(0, 0, 0, 0.95); border-color: #888; }
+        #pause-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.55);
+            display: none;
+            z-index: 4;
+            align-items: center;
+            justify-content: center;
+            color: #f1c40f;
+            font-size: 64px;
+            letter-spacing: 8px;
+            text-shadow: 3px 3px 0 #000;
+        }
         
         /* Main Menu UI */
         #main-menu {
@@ -60,7 +95,7 @@
         .menu-btn.disabled { background: #7f8c8d; border-color: #95a5a6; cursor: not-allowed; }
 
         /* Shop Menu */
-        #shop-menu {
+        #shop-menu, #bp-menu {
             position: absolute;
             top: 50%; left: 50%;
             transform: translate(-50%, -50%);
@@ -74,6 +109,7 @@
             box-shadow: 0 0 25px rgba(142, 68, 173, 0.6);
             display: none;
         }
+        #bp-menu { border-color: #3498db; box-shadow: 0 0 25px rgba(52, 152, 219, 0.6); }
         .shop-title { font-size: 24px; color: #f1c40f; text-align: center; margin-bottom: 12px; letter-spacing: 2px; }
         #shop-info { font-size: 14px; color: #bdc3c7; margin-bottom: 12px; border-bottom: 1px solid #555; padding-bottom: 10px; }
         .shop-opt { font-size: 16px; margin: 8px 0; color: #ecf0f1; }
@@ -104,13 +140,28 @@
     <div id="shop-menu">
         <div class="shop-title">SHOP</div>
         <div id="shop-info"></div>
-        <div class="shop-opt" id="shop-opt-1">[1] Sell all Wood</div>
-        <div class="shop-opt" id="shop-opt-2">[2] Buy Axe (chop trees faster) — 20g</div>
-        <div class="shop-opt" id="shop-opt-3">[3] Buy Pickaxe (mine stone) — 25g</div>
-        <div class="shop-opt" id="shop-opt-4">[4] Buy Sword (more damage) — 30g</div>
-        <div class="shop-opt" id="shop-opt-5">[5] Close</div>
-        <div class="shop-hint">Press 1–5 or ESC</div>
+        <div class="shop-opt" id="shop-opt-1">[1] Sell 1 Wood</div>
+        <div class="shop-opt" id="shop-opt-2">[2] Sell 10 Wood</div>
+        <div class="shop-opt" id="shop-opt-3">[3] Sell ALL Wood</div>
+        <div class="shop-opt" id="shop-opt-4">[4] Buy Axe</div>
+        <div class="shop-opt" id="shop-opt-5">[5] Buy Pickaxe</div>
+        <div class="shop-opt" id="shop-opt-6">[6] Buy Sword</div>
+        <div class="shop-opt" id="shop-opt-7">[7] Close</div>
+        <div class="shop-hint">Press 1–7 or ESC</div>
     </div>
+
+    <div id="bp-menu">
+        <div class="shop-title">BLUEPRINTS</div>
+        <div id="bp-info"></div>
+        <div class="shop-opt" id="bp-opt-1">[1] Small Shack</div>
+        <div class="shop-opt" id="bp-opt-2">[2] Stone Cottage</div>
+        <div class="shop-opt" id="bp-opt-3">[3] Watch Tower</div>
+        <div class="shop-opt" id="bp-opt-4">[4] Close</div>
+        <div class="shop-hint">Press 1–4 or ESC. Buildings spawn next to you.</div>
+    </div>
+
+    <button id="btn-pause" title="P">⏸ PAUSE</button>
+    <div id="pause-overlay">PAUSED</div>
 
     <canvas id="gameCanvas"></canvas>
 
@@ -125,7 +176,9 @@ function startGame(isSolo) {
     singlePlayer = isSolo;
     document.getElementById('main-menu').style.display = 'none';
     document.getElementById('ui').style.display = 'block';
-    resizeCanvas();
+    document.getElementById('btn-pause').style.display = 'block';
+    resizeViewport();
+    initWorld();
     gameRunning = true;
     gameLoop();
 }
@@ -136,11 +189,45 @@ document.getElementById('btn-local').addEventListener('click', () => startGame(f
 document.getElementById('btn-host').addEventListener('click', () => alert("Requires a Node.js/WebSocket backend to route traffic."));
 document.getElementById('btn-join').addEventListener('click', () => alert("Requires a Node.js/WebSocket backend to route traffic."));
 
+// --- SPRITES (inline SVG icons for UI/shop) ---
+const SPRITES = {
+    wood:       `<svg width="16" height="16" viewBox="0 0 16 16"><rect x="2" y="5" width="12" height="6" rx="1" fill="#5c4033"/><rect x="2" y="5" width="12" height="1.5" fill="#7a5a44"/><circle cx="4" cy="8" r="1.2" fill="#3a2820"/><circle cx="11" cy="8" r="1.2" fill="#3a2820"/></svg>`,
+    stone:      `<svg width="16" height="16" viewBox="0 0 16 16"><circle cx="6" cy="9" r="5" fill="#5a6470"/><circle cx="11" cy="7" r="4" fill="#5a6470"/><circle cx="8" cy="5" r="2" fill="#7f8c8d"/></svg>`,
+    gold:       `<svg width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="#f1c40f" stroke="#b9890b" stroke-width="1.2"/><text x="8" y="11" font-size="7" text-anchor="middle" fill="#b9890b" font-family="Courier" font-weight="bold">g</text></svg>`,
+    rawMeat:    `<svg width="16" height="16" viewBox="0 0 16 16"><ellipse cx="8" cy="9" rx="6" ry="4.5" fill="#e74c3c"/><ellipse cx="8" cy="9" rx="2.5" ry="1.3" fill="#ffd0c4"/><circle cx="3" cy="6" r="1.2" fill="#e8a0a0"/></svg>`,
+    cookedMeat: `<svg width="16" height="16" viewBox="0 0 16 16"><ellipse cx="8" cy="9" rx="6" ry="4.5" fill="#8e4520"/><ellipse cx="8" cy="9" rx="2.5" ry="1.3" fill="#5a2a0f"/><circle cx="3" cy="6" r="1.2" fill="#5a2a0f"/></svg>`,
+    axe:        `<svg width="16" height="16" viewBox="0 0 16 16"><rect x="7" y="3" width="2" height="11" fill="#5c4033" transform="rotate(-15 8 8)"/><polygon points="2,3 11,3 11,7 4,7" fill="#bdc3c7" stroke="#555" stroke-width="0.5"/></svg>`,
+    pickaxe:    `<svg width="16" height="16" viewBox="0 0 16 16"><rect x="7" y="5" width="2" height="10" fill="#5c4033"/><path d="M1 5 Q8 1 15 5" stroke="#bdc3c7" stroke-width="2.5" fill="none"/></svg>`,
+    sword:      `<svg width="16" height="16" viewBox="0 0 16 16"><polygon points="7,1 9,1 9,11 8,12 7,11" fill="#bdc3c7" stroke="#555" stroke-width="0.5"/><rect x="5" y="11" width="6" height="1.5" fill="#5c4033"/><rect x="7" y="12.5" width="2" height="3" fill="#5c4033"/></svg>`,
+    hp:         `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M8 14 C0 8 2 2 8 5 C14 2 16 8 8 14 Z" fill="#e74c3c"/></svg>`,
+    fire:       `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M8 15 C2 13 2 8 5 6 C5 8 7 9 8 7 C9 9 11 8 11 6 C14 8 14 13 8 15 Z" fill="#e67e22"/><path d="M8 15 C5 13 5 10 8 9 C11 10 11 13 8 15 Z" fill="#f1c40f"/></svg>`,
+    campfire:   `<svg width="16" height="16" viewBox="0 0 16 16"><rect x="1" y="12" width="14" height="2.5" rx="1" fill="#5c4033"/><rect x="2.5" y="10" width="11" height="2" rx="0.6" fill="#7a5a44"/><path d="M8 11 C3 9 3 5 6 3 C6 5 8 6 8 4 C8 6 10 5 10 3 C13 5 13 9 8 11 Z" fill="#e67e22"/><path d="M8 10 C5 8 5 6 8 5 C11 6 11 8 8 10 Z" fill="#f1c40f"/></svg>`,
+    clock:      `<svg width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="#ecf0f1" stroke="#2c3e50" stroke-width="1"/><line x1="8" y1="8" x2="8" y2="4" stroke="#2c3e50" stroke-width="1.2"/><line x1="8" y1="8" x2="11" y2="9" stroke="#2c3e50" stroke-width="1.2"/></svg>`,
+    hands:      `<svg width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="9" r="5" fill="#f1c27d" stroke="#a0855d" stroke-width="1"/><rect x="6" y="3" width="1.4" height="5" fill="#f1c27d" stroke="#a0855d" stroke-width="0.4"/><rect x="8.6" y="3" width="1.4" height="5" fill="#f1c27d" stroke="#a0855d" stroke-width="0.4"/></svg>`,
+};
+
+const HELD_LABEL = { hands: 'Hands', axe: 'Axe', pickaxe: 'Pickaxe', sword: 'Sword', rawMeat: 'Raw meat', cookedMeat: 'Cooked meat' };
+
+// --- WORLD / CAMERA ---
+const WORLD_WIDTH = 3200;
+const WORLD_HEIGHT = 2400;
+const camera = { x: 0, y: 0 };
+
+function updateCamera() {
+    if (!players.length) return;
+    const avgX = players.reduce((s, p) => s + p.x, 0) / players.length;
+    const avgY = players.reduce((s, p) => s + p.y, 0) / players.length;
+    camera.x = avgX - canvas.width / 2;
+    camera.y = avgY - canvas.height / 2;
+    camera.x = Math.max(0, Math.min(WORLD_WIDTH - canvas.width, camera.x));
+    camera.y = Math.max(0, Math.min(WORLD_HEIGHT - canvas.height, camera.y));
+}
+
 // --- GAME STATE & TIMING ---
 // 3 real minutes (180 seconds) = 1 in-game day (1440 in-game minutes)
 // Assuming 60 FPS: 180 seconds * 60 frames = 10,800 frames per day.
 // 1440 / 10800 = 0.1333 in-game minutes added per frame.
-const TIME_SPEED = 0.1333; 
+const TIME_SPEED = 0.1333;
 
 const gameState = {
     time: 8 * 60, // Start at 8:00 AM
@@ -152,6 +239,8 @@ const gameState = {
     cookedMeat: 0,
     tools: { axe: false, pickaxe: false, sword: false },
     shopOpen: false,
+    blueprintShopOpen: false,
+    paused: false,
     message: "Find the shopkeeper!",
     messageTimer: 300,
     showMessage: function(msg) {
@@ -160,10 +249,36 @@ const gameState = {
     }
 };
 
+function isMenuOpen() { return gameState.shopOpen || gameState.blueprintShopOpen; }
+
+function togglePause() {
+    if (!gameRunning) return;
+    gameState.paused = !gameState.paused;
+    const btn = document.getElementById('btn-pause');
+    btn.textContent = gameState.paused ? '▶ RESUME' : '⏸ PAUSE';
+    document.getElementById('pause-overlay').style.display = gameState.paused ? 'flex' : 'none';
+}
+
+document.getElementById('btn-pause').addEventListener('click', togglePause);
+window.addEventListener('keydown', e => {
+    if (e.repeat) return;
+    if (e.code === 'KeyP' && gameRunning && !isMenuOpen()) togglePause();
+});
+
 // --- INPUT ---
 const keys = {};
 window.addEventListener('keydown', e => { keys[e.code] = true; });
 window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+// Held-item cycle: single-press only (e.repeat skips auto-repeat firings).
+window.addEventListener('keydown', e => {
+    if (e.repeat) return;
+    if (isMenuOpen()) return;
+    if (!gameRunning) return;
+    for (const p of players) {
+        if (p.controls.switch === e.code) { p.cycleItem(); break; }
+    }
+});
 
 // --- CLASSES ---
 class Player {
@@ -178,17 +293,45 @@ class Player {
         this.direction = 'down';
         this.maxHP = 100;
         this.hp = 100;
+        this.heldIndex = 0;
+    }
+
+    getHeldItems() {
+        const items = ['hands'];
+        if (gameState.tools.axe) items.push('axe');
+        if (gameState.tools.pickaxe) items.push('pickaxe');
+        if (gameState.tools.sword) items.push('sword');
+        if (gameState.cookedMeat > 0) items.push('cookedMeat');
+        if (gameState.rawMeat > 0) items.push('rawMeat');
+        return items;
+    }
+
+    getHeldItem() {
+        const items = this.getHeldItems();
+        if (items.length === 0) return 'hands';
+        this.heldIndex = ((this.heldIndex % items.length) + items.length) % items.length;
+        return items[this.heldIndex];
+    }
+
+    cycleItem() {
+        const items = this.getHeldItems();
+        if (items.length <= 1) {
+            gameState.showMessage(`${this.name} has nothing else to hold.`);
+            return;
+        }
+        this.heldIndex = (this.heldIndex + 1) % items.length;
+        gameState.showMessage(`${this.name} is holding: ${HELD_LABEL[items[this.heldIndex]] || items[this.heldIndex]}.`);
     }
 
     update() {
-        if (gameState.shopOpen) return; // freeze while shopping
+        if (isMenuOpen()) return; // freeze while menu open
         if (keys[this.controls.up]) { this.y -= this.speed; this.direction = 'up'; }
         if (keys[this.controls.down]) { this.y += this.speed; this.direction = 'down'; }
         if (keys[this.controls.left]) { this.x -= this.speed; this.direction = 'left'; }
         if (keys[this.controls.right]) { this.x += this.speed; this.direction = 'right'; }
 
-        this.x = Math.max(15, Math.min(canvas.width - 15, this.x));
-        this.y = Math.max(15, Math.min(canvas.height - 15, this.y));
+        this.x = Math.max(15, Math.min(WORLD_WIDTH - 15, this.x));
+        this.y = Math.max(15, Math.min(WORLD_HEIGHT - 15, this.y));
     }
 
     damage(amount) {
@@ -244,6 +387,50 @@ class Player {
         ctx.font = '10px Courier';
         ctx.textAlign = 'center';
         ctx.fillText(this.name, 0, -32);
+
+        // Held item icon next to the player's hand
+        const held = this.getHeldItem();
+        if (held && held !== 'hands') {
+            const off = (this.direction === 'left') ? -16 : 16;
+            if (held === 'axe') {
+                ctx.fillStyle = '#5c4033';
+                ctx.fillRect(off - 1, -6, 2, 14);
+                ctx.fillStyle = '#bdc3c7';
+                ctx.fillRect(off - 5, -8, 10, 5);
+            } else if (held === 'pickaxe') {
+                ctx.fillStyle = '#5c4033';
+                ctx.fillRect(off - 1, -4, 2, 12);
+                ctx.fillStyle = '#bdc3c7';
+                ctx.beginPath();
+                ctx.moveTo(off - 7, -6); ctx.lineTo(off + 7, -6);
+                ctx.lineTo(off + 5, -3); ctx.lineTo(off - 5, -3);
+                ctx.closePath(); ctx.fill();
+            } else if (held === 'sword') {
+                ctx.fillStyle = '#bdc3c7';
+                ctx.fillRect(off - 1, -10, 2, 14);
+                ctx.fillStyle = '#5c4033';
+                ctx.fillRect(off - 3, 4, 6, 2);
+                ctx.fillRect(off - 1, 6, 2, 4);
+            } else if (held === 'rawMeat') {
+                ctx.fillStyle = '#e74c3c';
+                ctx.beginPath();
+                ctx.ellipse(off, 0, 6, 4, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#ffd0c4';
+                ctx.beginPath();
+                ctx.ellipse(off, 0, 2.5, 1.5, 0, 0, Math.PI * 2);
+                ctx.fill();
+            } else if (held === 'cookedMeat') {
+                ctx.fillStyle = '#8e4520';
+                ctx.beginPath();
+                ctx.ellipse(off, 0, 6, 4, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#5a2a0f';
+                ctx.beginPath();
+                ctx.ellipse(off, 0, 2.5, 1.5, 0, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
 
         ctx.restore();
     }
@@ -347,14 +534,101 @@ class Entity {
             ctx.arc(15, -15, 20, 0, Math.PI * 2);
             ctx.fill();
         } else if (this.type === 'shop') {
+            // Walls
+            ctx.fillStyle = '#d4a574';
+            ctx.fillRect(-32, -10, 64, 32);
+            // Wall trim
             ctx.fillStyle = '#8e44ad';
-            ctx.fillRect(-25, -25, 50, 40);
-            ctx.fillStyle = '#ecf0f1';
-            ctx.fillRect(-15, -10, 30, 25);
+            ctx.fillRect(-32, -10, 64, 4);
+            ctx.fillRect(-32, 18, 64, 4);
+            // Roof (red gabled)
+            ctx.fillStyle = '#c0392b';
+            ctx.beginPath();
+            ctx.moveTo(-38, -8);
+            ctx.lineTo(0, -36);
+            ctx.lineTo(38, -8);
+            ctx.closePath();
+            ctx.fill();
+            // Roof shingles stripe
+            ctx.fillStyle = '#922';
+            ctx.fillRect(-36, -10, 72, 3);
+            // Windows
+            ctx.fillStyle = '#aee7f5';
+            ctx.fillRect(-25, 0, 12, 10);
+            ctx.fillRect(13, 0, 12, 10);
+            ctx.strokeStyle = '#5c4033';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(-25, 0, 12, 10);
+            ctx.strokeRect(13, 0, 12, 10);
+            ctx.beginPath(); ctx.moveTo(-19, 0); ctx.lineTo(-19, 10); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(-25, 5); ctx.lineTo(-13, 5); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(19, 0); ctx.lineTo(19, 10); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(13, 5); ctx.lineTo(25, 5); ctx.stroke();
+            // Door
+            ctx.fillStyle = '#5c4033';
+            ctx.fillRect(-7, 6, 14, 16);
             ctx.fillStyle = '#f1c40f';
-            ctx.font = '12px Courier bold';
+            ctx.beginPath(); ctx.arc(4, 14, 1.2, 0, Math.PI * 2); ctx.fill();
+            // Hanging sign
+            ctx.fillStyle = '#5c4033';
+            ctx.fillRect(-1, -42, 2, 6);
+            ctx.fillStyle = '#f1c40f';
+            ctx.fillRect(-22, -50, 44, 10);
+            ctx.strokeStyle = '#5c4033';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(-22, -50, 44, 10);
+            ctx.fillStyle = '#5c4033';
+            ctx.font = 'bold 9px Courier';
             ctx.textAlign = 'center';
-            ctx.fillText("SHOP", 0, -35);
+            ctx.fillText("SHOP", 0, -42);
+        } else if (this.type === 'blueprint_shop') {
+            // Walls (stone-ish)
+            ctx.fillStyle = '#bdc3c7';
+            ctx.fillRect(-35, -10, 70, 34);
+            // Wall trim
+            ctx.fillStyle = '#34495e';
+            ctx.fillRect(-35, -10, 70, 4);
+            ctx.fillRect(-35, 20, 70, 4);
+            // Roof (blue gabled)
+            ctx.fillStyle = '#2980b9';
+            ctx.beginPath();
+            ctx.moveTo(-42, -8);
+            ctx.lineTo(0, -38);
+            ctx.lineTo(42, -8);
+            ctx.closePath();
+            ctx.fill();
+            ctx.fillStyle = '#1f5d80';
+            ctx.fillRect(-40, -10, 80, 3);
+            // Tool decorations on the wall (hammer + saw)
+            // Hammer
+            ctx.fillStyle = '#5c4033';
+            ctx.fillRect(-26, 2, 2, 14);
+            ctx.fillStyle = '#7f8c8d';
+            ctx.fillRect(-30, 0, 10, 5);
+            // Saw blade
+            ctx.fillStyle = '#bdc3c7';
+            ctx.beginPath();
+            ctx.moveTo(15, 4); ctx.lineTo(28, 4); ctx.lineTo(26, 9); ctx.lineTo(17, 9);
+            ctx.closePath(); ctx.fill();
+            ctx.fillStyle = '#5c4033';
+            ctx.fillRect(11, 4, 5, 5);
+            // Door
+            ctx.fillStyle = '#5c4033';
+            ctx.fillRect(-7, 8, 14, 16);
+            ctx.fillStyle = '#f1c40f';
+            ctx.beginPath(); ctx.arc(4, 16, 1.2, 0, Math.PI * 2); ctx.fill();
+            // Hanging sign
+            ctx.fillStyle = '#34495e';
+            ctx.fillRect(-1, -44, 2, 6);
+            ctx.fillStyle = '#3498db';
+            ctx.fillRect(-30, -54, 60, 12);
+            ctx.strokeStyle = '#1f5d80';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(-30, -54, 60, 12);
+            ctx.fillStyle = '#ecf0f1';
+            ctx.font = 'bold 9px Courier';
+            ctx.textAlign = 'center';
+            ctx.fillText("BLUEPRINTS", 0, -45);
         } else if (this.type === 'cave') {
             const isNight = isNightTime();
             ctx.fillStyle = '#34495e';
@@ -412,8 +686,8 @@ class Cow {
             this.vx = -dx * 0.01;
             this.vy = -dy * 0.01;
         }
-        this.x = Math.max(20, Math.min(canvas.width - 20, this.x));
-        this.y = Math.max(20, Math.min(canvas.height - 20, this.y));
+        this.x = Math.max(20, Math.min(WORLD_WIDTH - 20, this.x));
+        this.y = Math.max(20, Math.min(WORLD_HEIGHT - 20, this.y));
         if (this.hitFlash > 0) this.hitFlash--;
     }
 
@@ -477,47 +751,229 @@ class Cow {
     }
 }
 
+class Building {
+    constructor(x, y, type, w, h) {
+        this.x = x;
+        this.y = y;
+        this.type = type;
+        this.w = w;
+        this.h = h;
+    }
+    contains(p) {
+        return p.x > this.x - this.w / 2 && p.x < this.x + this.w / 2
+            && p.y > this.y - this.h / 2 && p.y < this.y + this.h / 2;
+    }
+    drawBase(ctx) {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        const w = this.w, h = this.h;
+        // Shadow
+        ctx.fillStyle = 'rgba(0,0,0,0.35)';
+        ctx.beginPath(); ctx.ellipse(0, h/2 + 5, w/2 + 4, 9, 0, 0, Math.PI * 2); ctx.fill();
+        if (this.type === 'small_shack') {
+            // Floor
+            ctx.fillStyle = '#a07050';
+            ctx.fillRect(-w/2 + 5, -h/2 + 12, w - 10, h - 16);
+            // Floor planks
+            ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+            for (let yy = -h/2 + 22; yy < h/2 - 5; yy += 12) {
+                ctx.beginPath(); ctx.moveTo(-w/2 + 5, yy); ctx.lineTo(w/2 - 5, yy); ctx.stroke();
+            }
+            // Walls (4 sides)
+            ctx.fillStyle = '#7a4a30';
+            ctx.fillRect(-w/2, -h/2 + 10, w, 6);
+            ctx.fillRect(-w/2, h/2 - 4, w, 4);
+            ctx.fillRect(-w/2, -h/2 + 10, 5, h - 14);
+            ctx.fillRect(w/2 - 5, -h/2 + 10, 5, h - 14);
+            // Door
+            ctx.fillStyle = '#3a2820';
+            ctx.fillRect(-9, h/2 - 16, 18, 12);
+            ctx.fillStyle = '#f1c40f';
+            ctx.beginPath(); ctx.arc(5, h/2 - 10, 1.2, 0, Math.PI * 2); ctx.fill();
+        } else if (this.type === 'stone_cottage') {
+            // Floor
+            ctx.fillStyle = '#b0aaa0';
+            ctx.fillRect(-w/2 + 6, -h/2 + 14, w - 12, h - 18);
+            // Stone tiles
+            ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+            for (let yy = -h/2 + 22; yy < h/2 - 5; yy += 16) {
+                ctx.beginPath(); ctx.moveTo(-w/2 + 6, yy); ctx.lineTo(w/2 - 6, yy); ctx.stroke();
+            }
+            // Walls
+            ctx.fillStyle = '#5a6470';
+            ctx.fillRect(-w/2, -h/2 + 10, w, 8);
+            ctx.fillRect(-w/2, h/2 - 4, w, 4);
+            ctx.fillRect(-w/2, -h/2 + 10, 6, h - 14);
+            ctx.fillRect(w/2 - 6, -h/2 + 10, 6, h - 14);
+            // Door
+            ctx.fillStyle = '#3a2820';
+            ctx.fillRect(-10, h/2 - 18, 20, 14);
+            ctx.fillStyle = '#f1c40f';
+            ctx.beginPath(); ctx.arc(6, h/2 - 12, 1.4, 0, Math.PI * 2); ctx.fill();
+        } else if (this.type === 'watch_tower') {
+            // Stone floor
+            ctx.fillStyle = '#90a0aa';
+            ctx.fillRect(-w/2 + 6, -h/2 + 16, w - 12, h - 20);
+            // Walls
+            ctx.fillStyle = '#5a6470';
+            ctx.fillRect(-w/2, -h/2 + 12, w, 8);
+            ctx.fillRect(-w/2, h/2 - 4, w, 4);
+            ctx.fillRect(-w/2, -h/2 + 12, 6, h - 16);
+            ctx.fillRect(w/2 - 6, -h/2 + 12, 6, h - 16);
+            // Crenellation hints on top wall
+            ctx.fillStyle = '#3d4750';
+            for (let xx = -w/2 + 4; xx < w/2 - 4; xx += 10) {
+                ctx.fillRect(xx, -h/2 + 8, 4, 4);
+            }
+            // Door
+            ctx.fillStyle = '#3a2820';
+            ctx.fillRect(-7, h/2 - 14, 14, 10);
+        }
+        ctx.restore();
+    }
+    drawRoof(ctx, alpha) {
+        if (alpha <= 0) return;
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.globalAlpha = alpha;
+        const w = this.w, h = this.h;
+        if (this.type === 'small_shack') {
+            // Thatched gable roof
+            ctx.fillStyle = '#b07a3a';
+            ctx.beginPath();
+            ctx.moveTo(-w/2 - 6, -h/2 + 18);
+            ctx.lineTo(0, -h/2 - 16);
+            ctx.lineTo(w/2 + 6, -h/2 + 18);
+            ctx.closePath();
+            ctx.fill();
+            // Shingle stripes
+            ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+            ctx.beginPath(); ctx.moveTo(-w/2 - 6, -h/2 + 10); ctx.lineTo(w/2 + 6, -h/2 + 10); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(-w/2 - 6, -h/2); ctx.lineTo(w/2 + 6, -h/2); ctx.stroke();
+        } else if (this.type === 'stone_cottage') {
+            ctx.fillStyle = '#7a4030';
+            ctx.beginPath();
+            ctx.moveTo(-w/2 - 8, -h/2 + 20);
+            ctx.lineTo(0, -h/2 - 22);
+            ctx.lineTo(w/2 + 8, -h/2 + 20);
+            ctx.closePath();
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+            ctx.beginPath(); ctx.moveTo(-w/2 - 8, -h/2 + 10); ctx.lineTo(w/2 + 8, -h/2 + 10); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(-w/2 - 8, -h/2 - 2); ctx.lineTo(w/2 + 8, -h/2 - 2); ctx.stroke();
+        } else if (this.type === 'watch_tower') {
+            ctx.fillStyle = '#5a4030';
+            ctx.beginPath();
+            ctx.moveTo(-w/2 - 10, -h/2 + 22);
+            ctx.lineTo(0, -h/2 - 32);
+            ctx.lineTo(w/2 + 10, -h/2 + 22);
+            ctx.closePath();
+            ctx.fill();
+            // Flag
+            ctx.fillStyle = '#5c4033';
+            ctx.fillRect(-1, -h/2 - 44, 2, 14);
+            ctx.fillStyle = '#e74c3c';
+            ctx.beginPath();
+            ctx.moveTo(1, -h/2 - 44);
+            ctx.lineTo(14, -h/2 - 40);
+            ctx.lineTo(1, -h/2 - 36);
+            ctx.closePath();
+            ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+        ctx.restore();
+    }
+}
+
 // --- SETUP ---
 let players = [];
 let entities = [];
 let cows = [];
+let buildings = [];
 let mainCampfire;
 
-function resizeCanvas() {
+function resizeViewport() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
-    
-    // Re-center entities on resize
-    const p1 = new Player(canvas.width / 2 - (singlePlayer ? 0 : 50), canvas.height / 2, '#2980b9', '#1abc9c', { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD', action: 'KeyF' }, "P1");
+}
+
+function initWorld() {
+    const cx = WORLD_WIDTH / 2;
+    const cy = WORLD_HEIGHT / 2;
+    const p1 = new Player(cx - (singlePlayer ? 0 : 50), cy, '#2980b9', '#1abc9c', { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD', action: 'KeyF', switch: 'KeyE' }, "P1");
     players = singlePlayer ? [p1] : [
         p1,
-        new Player(canvas.width / 2 + 50, canvas.height / 2, '#c0392b', '#e67e22', { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', action: 'KeyL' }, "P2")
+        new Player(cx + 50, cy, '#c0392b', '#e67e22', { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', action: 'KeyL', switch: 'KeyK' }, "P2")
     ];
-    
-    mainCampfire = new Campfire(canvas.width / 2, canvas.height / 2 + 100);
 
+    mainCampfire = new Campfire(cx, cy + 120);
+    buildings = [];
+
+    // --- Hand-placed landmarks + scattered forests ---
     entities = [
-        new Entity(200, 200, 'tree'), new Entity(280, 240, 'tree'), new Entity(150, 400, 'tree'),
-        new Entity(canvas.width - 250, 150, 'tree'), new Entity(canvas.width - 150, 200, 'tree'),
-        new Entity(360, 460, 'tree'), new Entity(canvas.width - 360, 460, 'tree'),
-        new Entity(canvas.width - 200, 350, 'shop'),
-        new Entity(canvas.width / 2, 150, 'cave'),
-        new Entity(180, canvas.height - 180, 'rock'),
-        new Entity(canvas.width - 200, canvas.height - 220, 'rock'),
-        new Entity(canvas.width / 2 - 220, canvas.height - 120, 'rock')
+        // Landmarks
+        new Entity(WORLD_WIDTH - 500, cy - 200, 'shop'),
+        new Entity(500, cy + 300, 'blueprint_shop'),
+        new Entity(cx, 300, 'cave'),
+        // Rocks scattered around
+        new Entity(400, WORLD_HEIGHT - 400, 'rock'),
+        new Entity(WORLD_WIDTH - 400, WORLD_HEIGHT - 350, 'rock'),
+        new Entity(cx - 400, WORLD_HEIGHT - 250, 'rock'),
+        new Entity(cx + 500, WORLD_HEIGHT - 300, 'rock'),
+        new Entity(900, 700, 'rock'),
+        new Entity(WORLD_WIDTH - 700, 800, 'rock'),
+        new Entity(700, WORLD_HEIGHT - 700, 'rock'),
+        new Entity(WORLD_WIDTH - 1100, cy + 400, 'rock'),
     ];
+
+    // Procedurally scatter many trees across the world, avoiding landmarks
+    const landmarks = entities.map(e => ({ x: e.x, y: e.y, r: 120 }));
+    landmarks.push({ x: cx, y: cy + 120, r: 200 }); // campfire clearing
+    landmarks.push({ x: cx, y: cy, r: 100 }); // spawn clearing
+    const treeCount = 70;
+    let attempts = 0;
+    let placed = 0;
+    const placedTrees = [];
+    while (placed < treeCount && attempts < treeCount * 8) {
+        attempts++;
+        const tx = 100 + Math.random() * (WORLD_WIDTH - 200);
+        const ty = 100 + Math.random() * (WORLD_HEIGHT - 200);
+        const clashes = landmarks.some(l => Math.hypot(tx - l.x, ty - l.y) < l.r)
+            || placedTrees.some(t => Math.hypot(tx - t.x, ty - t.y) < 55);
+        if (clashes) continue;
+        entities.push(new Entity(tx, ty, 'tree'));
+        placedTrees.push({ x: tx, y: ty });
+        placed++;
+    }
 
     cows = [
-        new Cow(canvas.width / 2 - 150, canvas.height - 300),
-        new Cow(canvas.width / 2 + 180, canvas.height - 260),
-        new Cow(canvas.width / 2 + 40, canvas.height - 380)
+        new Cow(cx - 200, cy + 250),
+        new Cow(cx + 220, cy + 280),
+        new Cow(cx + 60, cy + 380),
+        new Cow(cx - 600, cy - 300),
+        new Cow(cx + 700, cy - 250),
+        new Cow(cx - 300, cy + 600),
     ];
 }
 
 // --- UTILS ---
 function isNightTime() {
     const hours = Math.floor(gameState.time / 60);
-    return hours >= 20 || hours < 6; // Night: 8PM to 6AM
+    return hours >= 20 || hours < 6; // Night: 8PM to 6AM (used for cave gameplay)
+}
+
+// Smooth darkness curve: 0 during day, MAX during full night, linear fade through dusk/dawn.
+const NIGHT_MAX_ALPHA = 0.6;
+function getNightOpacity() {
+    const t = gameState.time;            // 0..1440 minutes
+    const DUSK_START = 18 * 60;
+    const NIGHT_START = 20 * 60;
+    const DAWN_START = 5 * 60;
+    const DAY_START = 7 * 60;
+    if (t >= NIGHT_START || t < DAWN_START) return NIGHT_MAX_ALPHA;
+    if (t >= DUSK_START) return NIGHT_MAX_ALPHA * (t - DUSK_START) / (NIGHT_START - DUSK_START);
+    if (t < DAY_START)   return NIGHT_MAX_ALPHA * (DAY_START - t) / (DAY_START - DAWN_START);
+    return 0;
 }
 
 function checkInteractions() {
@@ -527,16 +983,20 @@ function checkInteractions() {
 
         let didSomething = false;
 
-        // 1) Shop has highest priority — opens menu
+        // 1) Shop / blueprint shop have highest priority — open menu
         for (const ent of entities) {
-            if (!ent.active || ent.type !== 'shop') continue;
-            if (Math.hypot(player.x - ent.x, player.y - ent.y) < 60) {
-                openShop(player);
+            if (!ent.active) continue;
+            if (ent.type !== 'shop' && ent.type !== 'blueprint_shop') continue;
+            if (Math.hypot(player.x - ent.x, player.y - ent.y) < 70) {
+                if (ent.type === 'shop') openShop(player);
+                else openBlueprintShop(player);
                 didSomething = true;
                 break;
             }
         }
         if (didSomething) return;
+
+        const held = player.getHeldItem();
 
         // 2) Attack nearest cow in range
         let closestCow = null, closestCowDist = Infinity;
@@ -546,10 +1006,10 @@ function checkInteractions() {
             if (d < 55 && d < closestCowDist) { closestCow = cow; closestCowDist = d; }
         }
         if (closestCow) {
-            const dmg = gameState.tools.sword ? 20 : 5;
+            const dmg = held === 'sword' ? 20 : 5;
             const killed = closestCow.takeHit(dmg);
             if (killed) gameState.showMessage(`${player.name} killed a cow (+2 raw meat).`);
-            else gameState.showMessage(`${player.name} hit cow for ${dmg}.`);
+            else gameState.showMessage(`${player.name} hit cow for ${dmg}${held === 'sword' ? '' : ' — hold sword for more damage'}.`);
             return;
         }
 
@@ -560,20 +1020,35 @@ function checkInteractions() {
             if (dist >= 60) continue;
 
             if (ent.type === 'tree') {
-                const yield_ = gameState.tools.axe ? 7 : 3;
-                gameState.wood += yield_;
-                ent.active = false;
-                ent.respawnDay = gameState.day + 1;
-                gameState.showMessage(`${player.name} chopped a tree (+${yield_} wood).`);
+                if (held === 'axe') {
+                    gameState.wood += 7;
+                    ent.active = false;
+                    ent.respawnDay = gameState.day + 1;
+                    ent.chopProgress = 0;
+                    gameState.showMessage(`${player.name} chopped a tree with the axe (+7 wood).`);
+                } else {
+                    ent.chopProgress = (ent.chopProgress || 0) + 1;
+                    if (ent.chopProgress >= 4) {
+                        gameState.wood += 3;
+                        ent.active = false;
+                        ent.respawnDay = gameState.day + 1;
+                        ent.chopProgress = 0;
+                        gameState.showMessage(`${player.name} felled the tree (+3 wood).`);
+                    } else {
+                        const hint = gameState.tools.axe ? 'hold axe to fell in one hit' : 'buy an axe to fell in one hit';
+                        gameState.showMessage(`${player.name} chopped the tree (${ent.chopProgress}/4) — ${hint}.`);
+                    }
+                }
                 didSomething = true;
                 break;
             } else if (ent.type === 'rock') {
-                if (!gameState.tools.pickaxe) {
-                    gameState.showMessage(`Need a pickaxe to mine this rock.`);
+                if (held !== 'pickaxe') {
+                    const hint = gameState.tools.pickaxe ? 'hold the pickaxe to mine' : 'need a pickaxe to mine';
+                    gameState.showMessage(`${hint}.`);
                 } else {
                     gameState.stone += 2;
                     ent.active = false;
-                    ent.respawnDay = gameState.day + 2;
+                    ent.respawnDay = gameState.day + 1;
                     gameState.showMessage(`${player.name} mined a rock (+2 stone).`);
                 }
                 didSomething = true;
@@ -604,15 +1079,17 @@ function checkInteractions() {
             return;
         }
 
-        // 5) Open field: eat
-        if (gameState.cookedMeat > 0) {
+        // 5) Open field: eat whichever food you're holding
+        if (held === 'cookedMeat' && gameState.cookedMeat > 0) {
             gameState.cookedMeat--;
             player.heal(30);
             gameState.showMessage(`${player.name} ate cooked meat (+30 HP).`);
-        } else if (gameState.rawMeat > 0) {
+        } else if (held === 'rawMeat' && gameState.rawMeat > 0) {
             gameState.rawMeat--;
             player.damage(20);
             gameState.showMessage(`${player.name} ate RAW meat and got sick! (-20 HP)`);
+        } else if (held === 'hands') {
+            gameState.showMessage(`Cycle (${player.controls.switch === 'KeyE' ? 'E' : 'K'}) to a tool or food first.`);
         }
     });
 }
@@ -637,36 +1114,52 @@ function refreshShopMenu() {
     const owned = gameState.tools;
     document.getElementById('shop-info').innerHTML =
         `Customer: <b>${gameState.shopBuyer || 'P1'}</b><br>` +
-        `Gold: ${gameState.gold} &nbsp;|&nbsp; Wood: ${gameState.wood} &nbsp;|&nbsp; Stone: ${gameState.stone}`;
+        `${SPRITES.gold} ${gameState.gold} &nbsp; ${SPRITES.wood} ${gameState.wood} &nbsp; ${SPRITES.stone} ${gameState.stone}`;
 
-    const opt1 = document.getElementById('shop-opt-1');
-    opt1.textContent = `[1] Sell all Wood (${gameState.wood} × 2g = ${gameState.wood * 2}g)`;
-    opt1.classList.toggle('dim', gameState.wood <= 0);
-
-    const setToolOpt = (id, key, label, price) => {
+    const sellOpt = (id, n, label) => {
         const el = document.getElementById(id);
+        const haveEnough = gameState.wood >= n;
+        el.innerHTML = `[${id.slice(-1)}] ${label} ${SPRITES.wood} → ${n * 5}g ${SPRITES.gold}`;
+        el.classList.toggle('dim', !haveEnough);
+    };
+    sellOpt('shop-opt-1', 1, 'Sell 1 Wood');
+    sellOpt('shop-opt-2', 10, 'Sell 10 Wood');
+
+    const opt3 = document.getElementById('shop-opt-3');
+    opt3.innerHTML = `[3] Sell ALL Wood ${SPRITES.wood} (${gameState.wood} × 5g = ${gameState.wood * 5}g ${SPRITES.gold})`;
+    opt3.classList.toggle('dim', gameState.wood <= 0);
+
+    const setToolOpt = (id, key, label, sprite, price) => {
+        const el = document.getElementById(id);
+        const idx = id.slice(-1);
         if (owned[key]) {
-            el.textContent = `[${id.slice(-1)}] ${label} — OWNED`;
+            el.innerHTML = `[${idx}] ${sprite} ${label} — OWNED`;
             el.classList.add('dim');
         } else {
-            el.textContent = `[${id.slice(-1)}] Buy ${label} — ${price}g`;
+            el.innerHTML = `[${idx}] ${sprite} Buy ${label} — ${price}g ${SPRITES.gold}`;
             el.classList.toggle('dim', gameState.gold < price);
         }
     };
-    setToolOpt('shop-opt-2', 'axe', 'Axe (chop trees faster)', SHOP_PRICES.axe);
-    setToolOpt('shop-opt-3', 'pickaxe', 'Pickaxe (mine stone)', SHOP_PRICES.pickaxe);
-    setToolOpt('shop-opt-4', 'sword', 'Sword (more damage)', SHOP_PRICES.sword);
+    setToolOpt('shop-opt-4', 'axe',     'Axe (1-hit trees)',    SPRITES.axe,     SHOP_PRICES.axe);
+    setToolOpt('shop-opt-5', 'pickaxe', 'Pickaxe (mine stone)', SPRITES.pickaxe, SHOP_PRICES.pickaxe);
+    setToolOpt('shop-opt-6', 'sword',   'Sword (more damage)',  SPRITES.sword,   SHOP_PRICES.sword);
+
+    document.getElementById('shop-opt-7').textContent = '[7] Close';
 }
 
-function shopSellWood() {
+function shopSellWood(amount) {
     if (gameState.wood <= 0) {
         gameState.showMessage(`No wood to sell.`);
         return;
     }
-    const sold = gameState.wood;
-    const earned = sold * 2;
+    const sold = amount === 'all' ? gameState.wood : Math.min(amount, gameState.wood);
+    if (sold <= 0) {
+        gameState.showMessage(`Need ${amount} wood to sell that bundle.`);
+        return;
+    }
+    const earned = sold * 5;
     gameState.gold += earned;
-    gameState.wood = 0;
+    gameState.wood -= sold;
     gameState.showMessage(`Sold ${sold} wood for ${earned}g.`);
     refreshShopMenu();
 }
@@ -688,34 +1181,121 @@ function shopBuy(toolKey) {
 }
 
 window.addEventListener('keydown', e => {
-    if (!gameState.shopOpen) return;
-    if (e.code === 'Digit1' || e.code === 'Numpad1') shopSellWood();
-    else if (e.code === 'Digit2' || e.code === 'Numpad2') shopBuy('axe');
-    else if (e.code === 'Digit3' || e.code === 'Numpad3') shopBuy('pickaxe');
-    else if (e.code === 'Digit4' || e.code === 'Numpad4') shopBuy('sword');
-    else if (e.code === 'Digit5' || e.code === 'Numpad5' || e.code === 'Escape') closeShop();
+    if (gameState.shopOpen) {
+        if (e.code === 'Digit1' || e.code === 'Numpad1') shopSellWood(1);
+        else if (e.code === 'Digit2' || e.code === 'Numpad2') shopSellWood(10);
+        else if (e.code === 'Digit3' || e.code === 'Numpad3') shopSellWood('all');
+        else if (e.code === 'Digit4' || e.code === 'Numpad4') shopBuy('axe');
+        else if (e.code === 'Digit5' || e.code === 'Numpad5') shopBuy('pickaxe');
+        else if (e.code === 'Digit6' || e.code === 'Numpad6') shopBuy('sword');
+        else if (e.code === 'Digit7' || e.code === 'Numpad7' || e.code === 'Escape') closeShop();
+    } else if (gameState.blueprintShopOpen) {
+        if (e.code === 'Digit1' || e.code === 'Numpad1') buyBlueprint('small_shack');
+        else if (e.code === 'Digit2' || e.code === 'Numpad2') buyBlueprint('stone_cottage');
+        else if (e.code === 'Digit3' || e.code === 'Numpad3') buyBlueprint('watch_tower');
+        else if (e.code === 'Digit4' || e.code === 'Numpad4' || e.code === 'Escape') closeBlueprintShop();
+    }
 });
+
+// --- BLUEPRINT SHOP ---
+const BLUEPRINTS = {
+    small_shack:   { name: "Small Shack",   w: 100, h: 90,  cost: { wood: 30, stone: 0,  gold: 0  } },
+    stone_cottage: { name: "Stone Cottage", w: 130, h: 110, cost: { wood: 20, stone: 25, gold: 0  } },
+    watch_tower:   { name: "Watch Tower",   w: 90,  h: 130, cost: { wood: 15, stone: 40, gold: 20 } },
+};
+
+function openBlueprintShop(player) {
+    if (isMenuOpen()) return;
+    gameState.blueprintShopOpen = true;
+    gameState.blueprintBuyer = player;
+    refreshBlueprintMenu();
+    document.getElementById('bp-menu').style.display = 'block';
+}
+
+function closeBlueprintShop() {
+    gameState.blueprintShopOpen = false;
+    document.getElementById('bp-menu').style.display = 'none';
+}
+
+function refreshBlueprintMenu() {
+    document.getElementById('bp-info').innerHTML =
+        `Customer: <b>${gameState.blueprintBuyer ? gameState.blueprintBuyer.name : 'P1'}</b><br>` +
+        `${SPRITES.wood} ${gameState.wood} &nbsp; ${SPRITES.stone} ${gameState.stone} &nbsp; ${SPRITES.gold} ${gameState.gold}`;
+
+    const setBpOpt = (id, key) => {
+        const bp = BLUEPRINTS[key];
+        const el = document.getElementById(id);
+        const idx = id.slice(-1);
+        const c = bp.cost;
+        const canAfford = gameState.wood >= c.wood && gameState.stone >= c.stone && gameState.gold >= c.gold;
+        const parts = [];
+        if (c.wood)  parts.push(`${c.wood} ${SPRITES.wood}`);
+        if (c.stone) parts.push(`${c.stone} ${SPRITES.stone}`);
+        if (c.gold)  parts.push(`${c.gold} ${SPRITES.gold}`);
+        el.innerHTML = `[${idx}] ${bp.name} — ${parts.join(' + ')}`;
+        el.classList.toggle('dim', !canAfford);
+    };
+    setBpOpt('bp-opt-1', 'small_shack');
+    setBpOpt('bp-opt-2', 'stone_cottage');
+    setBpOpt('bp-opt-3', 'watch_tower');
+    document.getElementById('bp-opt-4').textContent = '[4] Close';
+}
+
+function buyBlueprint(key) {
+    const bp = BLUEPRINTS[key];
+    const c = bp.cost;
+    if (gameState.wood < c.wood || gameState.stone < c.stone || gameState.gold < c.gold) {
+        gameState.showMessage(`Not enough materials for ${bp.name}.`);
+        return;
+    }
+    gameState.wood  -= c.wood;
+    gameState.stone -= c.stone;
+    gameState.gold  -= c.gold;
+
+    // Place south of the buyer, clamped to world bounds.
+    const buyer = gameState.blueprintBuyer || players[0];
+    let bx = buyer.x;
+    let by = buyer.y + 130;
+    bx = Math.max(bp.w / 2 + 10, Math.min(WORLD_WIDTH  - bp.w / 2 - 10, bx));
+    by = Math.max(bp.h / 2 + 10, Math.min(WORLD_HEIGHT - bp.h / 2 - 10, by));
+    buildings.push(new Building(bx, by, key, bp.w, bp.h));
+    gameState.showMessage(`Built a ${bp.name}!`);
+    refreshBlueprintMenu();
+}
 
 function updateUI() {
     const hours = Math.floor(gameState.time / 60).toString().padStart(2, '0');
     const minutes = Math.floor(gameState.time % 60).toString().padStart(2, '0');
     
-    document.getElementById('ui-day').innerText = `Day: ${gameState.day} (Time: ${hours}:${minutes})`;
-    document.getElementById('ui-resources').innerText = `Wood: ${gameState.wood} | Stone: ${gameState.stone} | Gold: ${gameState.gold}`;
-    document.getElementById('ui-food').innerText = `Raw Meat: ${gameState.rawMeat} | Cooked: ${gameState.cookedMeat}`;
+    document.getElementById('ui-day').innerHTML = `${SPRITES.clock} Day ${gameState.day} — ${hours}:${minutes}`;
+    document.getElementById('ui-resources').innerHTML =
+        `${SPRITES.wood} ${gameState.wood}<span class="sep">|</span>` +
+        `${SPRITES.stone} ${gameState.stone}<span class="sep">|</span>` +
+        `${SPRITES.gold} ${gameState.gold}`;
+    document.getElementById('ui-food').innerHTML =
+        `${SPRITES.rawMeat} ${gameState.rawMeat}<span class="sep">|</span>` +
+        `${SPRITES.cookedMeat} ${gameState.cookedMeat}`;
 
     const ownedTools = Object.entries(gameState.tools).filter(([_, v]) => v).map(([k]) => k);
-    document.getElementById('ui-tools').innerText = `Tools: ${ownedTools.length ? ownedTools.join(', ') : 'Hands'}`;
+    const toolHtml = ownedTools.length
+        ? ownedTools.map(t => SPRITES[t] || t).join(' ')
+        : '(Hands)';
+    document.getElementById('ui-tools').innerHTML = `Tools: ${toolHtml}`;
 
     const hpEl = document.getElementById('ui-hp');
-    hpEl.innerText = players.map(p => `${p.name} HP: ${p.hp}`).join('  ');
+    hpEl.innerHTML = players.map(p => {
+        const held = p.getHeldItem();
+        const heldSprite = SPRITES[held] || '';
+        const switchKey = p.controls.switch === 'KeyE' ? 'E' : 'K';
+        return `${SPRITES.hp} ${p.name}: ${p.hp} ${heldSprite} <small style="color:#bdc3c7">(${switchKey})</small>`;
+    }).join('<span class="sep">|</span>');
     hpEl.style.color = players.some(p => p.hp < 30) ? '#e74c3c' : 'white';
 
     if (gameState.shopOpen) refreshShopMenu();
 
     const fuelPercent = Math.max(0, Math.floor((mainCampfire.currentFuel / mainCampfire.maxFuel) * 100));
     const fireUI = document.getElementById('ui-fire');
-    fireUI.innerText = `Campfire Fuel: ${fuelPercent}%`;
+    fireUI.innerHTML = `${SPRITES.campfire} Campfire: ${fuelPercent}%`;
     fireUI.style.color = fuelPercent < 20 ? '#e74c3c' : '#e67e22'; // Turn red if low
 
     const msgEl = document.getElementById('ui-msg');
@@ -731,103 +1311,161 @@ function updateUI() {
 function gameLoop() {
     if (!gameRunning) return;
 
-    // Time Update
-    gameState.time += TIME_SPEED;
-    if (gameState.time >= 24 * 60) {
-        gameState.time = 0;
-        gameState.day++;
-        if (gameState.day === 10) gameState.showMessage("WARNING: The Cave trembles...");
-    }
-
-    mainCampfire.update();
-    players.forEach(p => p.update());
-    cows.forEach(c => c.update());
-
-    // Tree/rock regrowth
-    for (const ent of entities) {
-        if (!ent.active && ent.respawnDay !== null && gameState.day >= ent.respawnDay) {
-            ent.active = true;
-            ent.respawnDay = null;
+    if (!gameState.paused) {
+        // Time Update
+        gameState.time += TIME_SPEED;
+        if (gameState.time >= 24 * 60) {
+            gameState.time = 0;
+            gameState.day++;
+            if (gameState.day === 10) gameState.showMessage("WARNING: The Cave trembles...");
         }
-    }
-    // Cow respawn
-    for (const cow of cows) {
-        if (!cow.active && cow.respawnDay !== null && gameState.day >= cow.respawnDay) {
-            cow.active = true;
-            cow.hp = cow.maxHP;
-            cow.respawnDay = null;
-            cow.x = cow.spawnX;
-            cow.y = cow.spawnY;
+
+        mainCampfire.update();
+        players.forEach(p => p.update());
+        cows.forEach(c => c.update());
+
+        // Tree/rock regrowth
+        for (const ent of entities) {
+            if (!ent.active && ent.respawnDay !== null && gameState.day >= ent.respawnDay) {
+                ent.active = true;
+                ent.respawnDay = null;
+            }
         }
+        // Cow respawn
+        for (const cow of cows) {
+            if (!cow.active && cow.respawnDay !== null && cow.respawnDay <= gameState.day) {
+                cow.active = true;
+                cow.hp = cow.maxHP;
+                cow.respawnDay = null;
+                cow.x = cow.spawnX;
+                cow.y = cow.spawnY;
+            }
+        }
+
+        checkInteractions();
     }
+    updateCamera();
 
-    checkInteractions();
+    // Figure out which building each player is inside (drives roof transparency
+    // and lifts the player above the walls in the y-sort so they appear inside).
+    players.forEach(p => {
+        p.insideBuilding = buildings.find(b => b.contains(p)) || null;
+    });
 
-    // Render Ground
-    ctx.fillStyle = '#1e5f38'; // Darker, richer grass
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // World-space rendering — translate by camera so screen shows the visible region.
+    ctx.save();
+    ctx.translate(-camera.x, -camera.y);
 
-    // Grid/Texture for better graphics
+    // Ground
+    ctx.fillStyle = '#1e5f38';
+    ctx.fillRect(camera.x, camera.y, canvas.width, canvas.height);
+
+    // Grid (aligned to world coords)
     ctx.strokeStyle = 'rgba(0,0,0,0.05)';
     ctx.lineWidth = 2;
-    for(let i = 0; i < canvas.width; i+=40) {
-        ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, canvas.height); ctx.stroke();
+    const gx0 = Math.floor(camera.x / 40) * 40;
+    const gy0 = Math.floor(camera.y / 40) * 40;
+    for (let i = gx0; i < camera.x + canvas.width; i += 40) {
+        ctx.beginPath(); ctx.moveTo(i, camera.y); ctx.lineTo(i, camera.y + canvas.height); ctx.stroke();
     }
-    for(let i = 0; i < canvas.height; i+=40) {
-        ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(canvas.width, i); ctx.stroke();
+    for (let i = gy0; i < camera.y + canvas.height; i += 40) {
+        ctx.beginPath(); ctx.moveTo(camera.x, i); ctx.lineTo(camera.x + canvas.width, i); ctx.stroke();
     }
 
-    // Render Objects (Sort by Y for faux-3D depth)
+    // Y-sorted render queue. Buildings draw their base here; roofs draw in a separate pass.
+    // A player inside a building gets bumped just below the roof so the walls don't cover them.
     const renderQueue = [
-        ...entities.filter(e => e.active),
-        ...cows.filter(c => c.active),
-        ...players,
-        mainCampfire
+        ...entities.filter(e => e.active).map(e => ({ y: e.y, draw: c => e.draw(c) })),
+        ...cows.filter(c => c.active).map(c => ({ y: c.y, draw: cx => c.draw(cx) })),
+        ...buildings.map(b => ({ y: b.y, draw: c => b.drawBase(c) })),
+        ...players.map(p => ({
+            y: p.insideBuilding ? p.insideBuilding.y + 0.5 : p.y,
+            draw: c => p.draw(c)
+        })),
+        { y: mainCampfire.y, draw: c => mainCampfire.draw(c) }
     ];
     renderQueue.sort((a, b) => a.y - b.y);
     renderQueue.forEach(obj => obj.draw(ctx));
 
-    // Night/Lighting Pass
-    if (isNightTime()) {
-        ctx.fillStyle = 'rgba(5, 5, 20, 0.85)'; // Deep blue night
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // Roofs: drawn after everything else. If any player is inside, fade to ~25% so the
+    // interior is visible.
+    buildings.forEach(b => {
+        const anyInside = players.some(p => p.insideBuilding === b);
+        b.drawRoof(ctx, anyInside ? 0.25 : 1.0);
+    });
+
+    // Night / Lighting Pass (still inside the camera transform so gradients use world coords)
+    const nightAlpha = getNightOpacity();
+    if (nightAlpha > 0.001) {
+        ctx.fillStyle = `rgba(0, 0, 0, ${nightAlpha.toFixed(3)})`;
+        ctx.fillRect(camera.x, camera.y, canvas.width, canvas.height);
 
         ctx.globalCompositeOperation = 'destination-out';
-        
-        // Campfire Light
+
+        // Wide daylight cutout around the campfire so the player can see themselves
+        // and the area around the fire at night.
         if (mainCampfire.active) {
-            const gradient = ctx.createRadialGradient(mainCampfire.x, mainCampfire.y, 20, mainCampfire.x, mainCampfire.y, 200);
-            gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
-            gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
-            ctx.fillStyle = gradient;
-            ctx.beginPath(); ctx.arc(mainCampfire.x, mainCampfire.y, 200, 0, Math.PI * 2); ctx.fill();
+            const r = 320;
+            const g = ctx.createRadialGradient(mainCampfire.x, mainCampfire.y, 0, mainCampfire.x, mainCampfire.y, r);
+            g.addColorStop(0,    'rgba(255,255,255,1)');
+            g.addColorStop(0.55, 'rgba(255,255,255,1)');
+            g.addColorStop(1,    'rgba(255,255,255,0)');
+            ctx.fillStyle = g;
+            ctx.beginPath(); ctx.arc(mainCampfire.x, mainCampfire.y, r, 0, Math.PI * 2); ctx.fill();
         }
 
-        // Flashlights (Directional light based on movement)
-        players.forEach(p => {
-            ctx.save();
-            ctx.translate(p.x, p.y);
-            
-            // Subtle body glow
-            let glow = ctx.createRadialGradient(0, 0, 5, 0, 0, 40);
-            glow.addColorStop(0, 'rgba(255,255,255,0.3)');
-            glow.addColorStop(1, 'rgba(255,255,255,0)');
-            ctx.fillStyle = glow;
-            ctx.beginPath(); ctx.arc(0, 0, 40, 0, Math.PI*2); ctx.fill();
+        // Shop & blueprint-shop lanterns
+        for (const ent of entities) {
+            if (!ent.active) continue;
+            if (ent.type !== 'shop' && ent.type !== 'blueprint_shop') continue;
+            const r = 150;
+            const g = ctx.createRadialGradient(ent.x, ent.y, 0, ent.x, ent.y, r);
+            g.addColorStop(0, 'rgba(255,255,255,1)');
+            g.addColorStop(0.55, 'rgba(255,255,255,0.85)');
+            g.addColorStop(1, 'rgba(255,255,255,0)');
+            ctx.fillStyle = g;
+            ctx.beginPath(); ctx.arc(ent.x, ent.y, r, 0, Math.PI * 2); ctx.fill();
+        }
 
-            ctx.restore();
+        // Player flashlight — bright enough to clearly see the player and their surroundings.
+        players.forEach(p => {
+            const r = 130;
+            const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
+            g.addColorStop(0,    'rgba(255,255,255,1)');
+            g.addColorStop(0.45, 'rgba(255,255,255,0.95)');
+            g.addColorStop(1,    'rgba(255,255,255,0)');
+            ctx.fillStyle = g;
+            ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.fill();
         });
 
         ctx.globalCompositeOperation = 'source-over';
+
+        // Additive warm glow around the campfire — boosts brightness on top of the
+        // cleared-night area so the firelit zone visibly glows. Scaled with nightAlpha
+        // so it fades in/out with dusk/dawn instead of popping on.
+        if (mainCampfire.active) {
+            const flicker = Math.random() * 10;
+            const r = 280 + flicker;
+            ctx.globalCompositeOperation = 'lighter';
+            ctx.globalAlpha = Math.min(1, nightAlpha / NIGHT_MAX_ALPHA);
+            const g = ctx.createRadialGradient(mainCampfire.x, mainCampfire.y, 30, mainCampfire.x, mainCampfire.y, r);
+            g.addColorStop(0,   'rgba(255, 220, 150, 0.55)');
+            g.addColorStop(0.5, 'rgba(255, 175, 100, 0.28)');
+            g.addColorStop(1,   'rgba(255, 150, 80, 0)');
+            ctx.fillStyle = g;
+            ctx.beginPath(); ctx.arc(mainCampfire.x, mainCampfire.y, r, 0, Math.PI * 2); ctx.fill();
+            ctx.globalAlpha = 1;
+            ctx.globalCompositeOperation = 'source-over';
+        }
     }
+
+    ctx.restore();
 
     updateUI();
     requestAnimationFrame(gameLoop);
 }
 
-window.addEventListener('resize', () => {
-    if(!gameRunning) resizeCanvas();
-});
+window.addEventListener('resize', resizeViewport);
 </script>
 </body>
 </html>
