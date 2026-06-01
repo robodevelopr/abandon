@@ -30,6 +30,7 @@ From the main menu:
 - **Start Local Co-op** — two players share one keyboard.
 - **Host Network Game** — you run the simulation; friends connect to your room.
 - **Join Network Game** — connect to a host's room.
+- **Load Saved Game** — resume the most recent save (offline only).
 
 ### Controls
 
@@ -40,6 +41,8 @@ From the main menu:
 | Cycle held item      | **E**    | **K**        |
 | Pause                | **P** (or click ⏸ PAUSE) | |
 | Back to main menu    | ✕ EXIT button | |
+| Save game            | 💾 SAVE button (in-game) | |
+| Load game            | Main menu → Load Saved Game | |
 
 The interact key is context-sensitive — same key does all of:
 - Chop a nearby tree (or mine a nearby rock with a pickaxe)
@@ -92,6 +95,12 @@ When any player steps inside a building, its roof disappears and you see a clean
 - Stand by the campfire, interact → **cook** 1 raw → 1 cooked.
 - Hold cooked meat in the open → **eat** for +30 HP. Raw meat: -20 HP.
 - HP 0 → respawn at the campfire with 50 HP.
+
+### Save & load
+
+- In-game **💾 SAVE** button writes a full snapshot to your browser's `localStorage` under the key `abandon_save_v1` — gameState (resources, time, day, tools, cave-opening count), every player (position, HP, held item), cows, zombies, NPCs (with task/tools/earnings), entities (active state + chop progress), buildings, and campfire fuel.
+- The main menu's **Load Saved Game** button restores that snapshot and drops you back in offline mode at the saved day/time.
+- Saves are offline-only — the button is hidden in Host/Join modes because the host's world is authoritative and live; the save key is also single-slot, so each save overwrites the previous one.
 
 ### Day cycle
 

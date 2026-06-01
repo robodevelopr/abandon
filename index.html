@@ -70,6 +70,24 @@
             box-shadow: 0 4px 6px rgba(0,0,0,0.5);
         }
         #btn-exit:hover { background: rgba(120, 30, 30, 0.95); border-color: #c66; }
+        #btn-save {
+            position: absolute;
+            top: 102px;
+            right: 10px;
+            z-index: 6;
+            display: none;
+            background: rgba(20, 60, 30, 0.75);
+            color: #ecf0f1;
+            border: 2px solid #2c8a4a;
+            padding: 8px 18px;
+            font-family: inherit;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 5px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.5);
+        }
+        #btn-save:hover { background: rgba(40, 100, 50, 0.95); border-color: #4ec47a; }
         #pause-overlay {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -157,6 +175,7 @@
         <button class="menu-btn" id="btn-local">Start Local Co-op</button>
         <button class="menu-btn" id="btn-host">Host Network Game</button>
         <button class="menu-btn" id="btn-join">Join Network Game</button>
+        <button class="menu-btn" id="btn-load">Load Saved Game</button>
     </div>
 
     <div id="ui">
@@ -208,6 +227,7 @@
 
     <button id="btn-pause" title="P">⏸ PAUSE</button>
     <button id="btn-exit" title="Back to menu">✕ EXIT</button>
+    <button id="btn-save" title="Save game">💾 SAVE</button>
     <div id="pause-overlay">PAUSED</div>
 
     <canvas id="gameCanvas"></canvas>
@@ -225,6 +245,7 @@ function startGame(isSolo) {
     document.getElementById('ui').style.display = 'block';
     document.getElementById('btn-pause').style.display = 'block';
     document.getElementById('btn-exit').style.display = 'block';
+    document.getElementById('btn-save').style.display = 'block';
     resizeViewport();
     initWorld();
     gameRunning = true;
@@ -584,6 +605,7 @@ function exitToMenu() {
     document.getElementById('ui').style.display = 'none';
     document.getElementById('btn-pause').style.display = 'none';
     document.getElementById('btn-exit').style.display = 'none';
+    document.getElementById('btn-save').style.display = 'none';
     document.getElementById('pause-overlay').style.display = 'none';
     document.getElementById('shop-menu').style.display = 'none';
     document.getElementById('bp-menu').style.display = 'none';
@@ -603,6 +625,170 @@ function exitToMenu() {
     gameState.messageTimer = 300;
 }
 document.getElementById('btn-exit').addEventListener('click', exitToMenu);
+
+// --- SAVE / LOAD ---
+const SAVE_KEY = 'abandon_save_v1';
+
+function hasSave() {
+    try { return !!localStorage.getItem(SAVE_KEY); }
+    catch (_) { return false; }
+}
+
+function saveGame() {
+    if (!gameRunning) return;
+    if (netMode !== 'offline') {
+        gameState.showMessage("Save is offline-only — disconnect first.");
+        return;
+    }
+    const snap = {
+        version: 1,
+        savedAt: new Date().toISOString(),
+        singlePlayer,
+        gameState: {
+            time: gameState.time,
+            day: gameState.day,
+            wood: gameState.wood,
+            stone: gameState.stone,
+            gold: gameState.gold,
+            rawMeat: gameState.rawMeat,
+            cookedMeat: gameState.cookedMeat,
+            tools: { ...gameState.tools },
+            caveOpenings: gameState.caveOpenings || 0,
+        },
+        prevCaveOpen,
+        fire: {
+            x: mainCampfire.x, y: mainCampfire.y,
+            currentFuel: mainCampfire.currentFuel, active: mainCampfire.active,
+        },
+        players: players.map(p => ({
+            x: p.x, y: p.y, hp: p.hp, name: p.name, direction: p.direction,
+            color: p.color, secColor: p.secColor, heldIndex: p.heldIndex,
+            controls: p.controls,
+        })),
+        cows: cows.map(c => ({
+            x: c.x, y: c.y, hp: c.hp, maxHP: c.maxHP, active: c.active,
+            respawnDay: c.respawnDay, spawnX: c.spawnX, spawnY: c.spawnY,
+        })),
+        zombies: zombies.map(z => ({ x: z.x, y: z.y, hp: z.hp, maxHP: z.maxHP, active: z.active })),
+        npcs: npcs.map(n => ({
+            x: n.x, y: n.y, hp: n.hp, maxHP: n.maxHP, active: n.active,
+            name: n.name, task: n.task, tools: { ...n.tools }, earnings: n.earnings,
+        })),
+        entities: entities.map(e => ({
+            x: e.x, y: e.y, type: e.type, active: e.active,
+            respawnDay: e.respawnDay, chopProgress: e.chopProgress || 0,
+        })),
+        buildings: buildings.map(b => ({ x: b.x, y: b.y, type: b.type, w: b.w, h: b.h })),
+    };
+    try {
+        localStorage.setItem(SAVE_KEY, JSON.stringify(snap));
+        gameState.showMessage(`Game saved (Day ${snap.gameState.day}).`);
+    } catch (e) {
+        gameState.showMessage(`Save failed: ${e.message}`);
+    }
+}
+
+function loadGame() {
+    let raw;
+    try { raw = localStorage.getItem(SAVE_KEY); }
+    catch (_) { raw = null; }
+    if (!raw) { alert('No save found.'); return; }
+    let snap;
+    try { snap = JSON.parse(raw); }
+    catch (e) { alert('Save file is corrupted.'); return; }
+    if (snap.version !== 1) { alert('Save was made by a different version of the game.'); return; }
+
+    // Disconnect any active network session and enter offline mode.
+    if (netSocket) {
+        const sock = netSocket;
+        netSocket = null;
+        try { sock.close(); } catch (_) {}
+    }
+    netMode = 'offline';
+    netClientId = null;
+    netRoom = null;
+
+    singlePlayer = !!snap.singlePlayer;
+    document.getElementById('main-menu').style.display = 'none';
+    document.getElementById('ui').style.display = 'block';
+    document.getElementById('btn-pause').style.display = 'block';
+    document.getElementById('btn-exit').style.display = 'block';
+    document.getElementById('btn-save').style.display = 'block';
+    document.getElementById('shop-menu').style.display = 'none';
+    document.getElementById('bp-menu').style.display = 'none';
+    document.getElementById('npc-menu').style.display = 'none';
+    document.getElementById('pause-overlay').style.display = 'none';
+    document.getElementById('btn-pause').textContent = '⏸ PAUSE';
+    resizeViewport();
+
+    // gameState scalars + tools
+    Object.assign(gameState, snap.gameState);
+    gameState.tools = { ...snap.gameState.tools };
+    gameState.message = `Loaded save (Day ${snap.gameState.day}).`;
+    gameState.messageTimer = 300;
+    gameState.shopOpen = false;
+    gameState.blueprintShopOpen = false;
+    gameState.npcMenuOpen = false;
+    gameState.paused = false;
+    prevCaveOpen = !!snap.prevCaveOpen;
+
+    mainCampfire = new Campfire(snap.fire.x, snap.fire.y);
+    mainCampfire.currentFuel = snap.fire.currentFuel;
+    mainCampfire.active = snap.fire.active;
+
+    players = snap.players.map(pd => {
+        const p = new Player(pd.x, pd.y, pd.color, pd.secColor, pd.controls, pd.name);
+        p.hp = pd.hp;
+        p.direction = pd.direction;
+        p.heldIndex = pd.heldIndex;
+        return p;
+    });
+
+    cows = snap.cows.map(cd => {
+        const c = new Cow(cd.spawnX ?? cd.x, cd.spawnY ?? cd.y);
+        c.x = cd.x; c.y = cd.y;
+        c.hp = cd.hp;
+        c.maxHP = cd.maxHP;
+        c.active = cd.active;
+        c.respawnDay = cd.respawnDay;
+        return c;
+    });
+
+    zombies = (snap.zombies || []).map(zd => {
+        const z = new Zombie(zd.x, zd.y);
+        z.hp = zd.hp;
+        z.maxHP = zd.maxHP;
+        z.active = zd.active;
+        return z;
+    });
+
+    npcs = (snap.npcs || []).map(nd => {
+        const n = new NPC(nd.x, nd.y, nd.name);
+        n.hp = nd.hp;
+        n.maxHP = nd.maxHP;
+        n.active = nd.active;
+        n.task = nd.task;
+        n.tools = { ...nd.tools };
+        n.earnings = nd.earnings || 0;
+        return n;
+    });
+
+    entities = snap.entities.map(ed => {
+        const e = new Entity(ed.x, ed.y, ed.type);
+        e.active = ed.active;
+        e.respawnDay = ed.respawnDay;
+        e.chopProgress = ed.chopProgress;
+        return e;
+    });
+
+    buildings = (snap.buildings || []).map(bd => new Building(bd.x, bd.y, bd.type, bd.w, bd.h));
+
+    gameRunning = true;
+    gameLoop();
+}
+
+document.getElementById('btn-save').addEventListener('click', saveGame);
+document.getElementById('btn-load').addEventListener('click', loadGame);
 
 // --- INPUT ---
 const keys = {};

@@ -36,10 +36,11 @@ The game lives in `index.html`. Modifications almost always happen inside the `<
 - `SPRITES` — inline SVG icons keyed by name (wood, stone, gold, axe, …). Used in the HUD and shop menus.
 - `WORLD_WIDTH = 3200`, `WORLD_HEIGHT = 2400` — fixed world size; the canvas is just a viewport.
 - `camera = {x, y}` — scrolls to follow local players. Set by `updateCamera()`.
-- `gameState` — shared resources/flags (wood, stone, gold, raw/cooked meat, tools, time, day, message, `shopOpen`, `blueprintShopOpen`, `paused`). **Tools and resources are shared between all players**, not per-player.
+- `gameState` — shared resources/flags (wood, stone, gold, raw/cooked meat, tools, time, day, message, `caveOpenings`, `shopOpen`, `blueprintShopOpen`, `npcMenuOpen`, `paused`). **Tools and resources are shared between all players**, not per-player.
 - Networking globals: `netMode` (`'offline'|'host'|'client'`), `netSocket`, `netClientId`, `netRoom`.
 - `keys` — event-code keyed map, populated by global `keydown`/`keyup` listeners.
-- `players`, `entities`, `cows`, `buildings`, `mainCampfire` — created by `initWorld()` (host / offline) or rebuilt from network snapshots (client).
+- `players`, `entities`, `cows`, `zombies`, `npcs`, `buildings`, `mainCampfire` — created by `initWorld()` (host / offline) or rebuilt from network snapshots (client).
+- `prevCaveOpen` — edge-detect flag for cave-opening waves.
 - `singlePlayer` — flag from the menu button (also used by host mode so the host starts solo and clients add slots as they join).
 - `nightLayer` — offscreen canvas for the night overlay. Sized by `resizeViewport()`.
 
@@ -49,14 +50,17 @@ The game lives in `index.html`. Modifications almost always happen inside the `<
 - `Cow` — wandering animal with HP. Tethered loosely to `spawnX/spawnY`. `takeHit()` returns true on kill.
 - `Campfire` — singleton. Fuel countdown + a warm glow ring always drawn while active.
 - `Building` — player-built structure. `drawBase()` for floor/walls/door; `drawRoof()` for the roof. `contains(player)` is a rectangular footprint test.
+- `Zombie` — emerges from the cave in waves. Targets the nearest living player and shambles toward them. HP 40, 10 dmg every ~0.83s, drops 5–14g.
+- `NPC` — friendly helper. Tasks: `idle` / `chop` / `hunt`. With the right tool the NPC walks to the nearest tree or cow, harvests, and accumulates `earnings` (35g per tree, 25g per cow kill). `collectShare()` gives the player 25% of accumulated earnings.
 
 ### `checkInteractions()` priority order
 For each player, on action press (consumed once per press: local via `keys[code] = false`, remote via `networkInput.actionLatch = false`):
 1. Shop / blueprint_shop within 70px — opens overlay menu, returns.
-2. Nearest cow within 55px — attack (5 dmg bare-handed, **20 with sword *held***).
-3. Trees / rocks / cave within 60px (first match wins).
-4. Campfire within 60px — cook raw meat if present, else add wood to refuel.
-5. Open field — eat the food the player is currently holding.
+2. NPC within 60px — opens NPC management menu, returns.
+3. Nearest enemy within 55px (zombies preferred over cows) — attack (5 dmg bare-handed, **20 with sword *held***).
+4. Trees / rocks / cave within 60px (first match wins).
+5. Campfire within 60px — cook raw meat if present, else add wood to refuel.
+6. Open field — eat the food the player is currently holding.
 
 Action results depend on what the player is **holding**, not just what they own:
 - Tree: axe held → 1-hit (+7 wood). Otherwise 4-hit chop (`chopProgress`) for +3 wood total.
@@ -93,7 +97,7 @@ The 55 vs 60 gap on cows is deliberate (trees take priority when both are in ran
 
 ### Main loop (`gameLoop`)
 1. Bail out if the game isn't running.
-2. If `netMode !== 'client'` and `!paused`: process remote switch latches, advance time/day, run `mainCampfire.update`, `players.forEach(p => p.update())`, `cows.forEach`, respawn sweeps, `checkInteractions()`.
+2. If `netMode !== 'client'` and `!paused`: process remote switch latches, advance time/day, run `mainCampfire.update`, `players/cows/zombies/npcs.forEach(.update())`, edge-detect cave open → spawn a wave of zombies (`1 + caveOpenings`, capped at 12) and on every 5th opening spawn an NPC near the campfire, trim dead zombies/npcs, respawn sweeps, `checkInteractions()`.
 3. Network I/O: host broadcasts a state snapshot ~20Hz; client sends keystate ~30Hz (paused-aware).
 4. `updateCamera()` (averages `players` filtered to `isLocal !== false`).
 5. Compute `player.insideBuilding`.
@@ -110,6 +114,8 @@ The 55 vs 60 gap on cows is deliberate (trees take priority when both are in ran
 - HUD: clock-day, resources, food, tools, per-player HP + held-item sprite + cycle-key hint, campfire fuel %, message line.
 - **Pause**: button (top-right) + **P** key. `e.repeat`-filtered, blocked while a menu is open. Toggles `gameState.paused` — the gameLoop still runs for rendering, but skips all simulation.
 - **Exit**: button (top-right, below pause). Closes the socket, resets `netMode`, resets `gameState` resources/day/tools/messages, hides in-game UI, shows the main menu.
+- **Save**: 💾 button below Exit. Calls `saveGame()` which serializes the full world (gameState, mainCampfire, players, cows, zombies, npcs, entities, buildings, `prevCaveOpen`) into `localStorage['abandon_save_v1']`. Refuses to save while `netMode !== 'offline'`.
+- **Load Saved Game**: main-menu button → `loadGame()`. Closes any active socket, switches to `netMode = 'offline'`, recreates every class from the snapshot, and starts the loop. Rejects mismatched `version`. Shown regardless of whether a save exists; pops an alert if none is found.
 
 ## Gotchas
 
@@ -120,7 +126,8 @@ The 55 vs 60 gap on cows is deliberate (trees take priority when both are in ran
 - **`Player.damage()` references `mainCampfire`** for respawn — only safe because it's not called before gameplay starts.
 - **Night halos require the offscreen `nightLayer`** — `destination-out` directly on the main canvas would also erase the world. If you refactor the lighting, keep the offscreen-then-`drawImage` pattern.
 - **Single-player vs co-op vs host** is decided by the menu button. Single-player → `singlePlayer=true`. Co-op → `singlePlayer=false`. Host → `singlePlayer=true` (clients add slots dynamically). Client → no `initWorld`, world arrives via state snapshots.
-- **No save/load and no determinism** — `Math.random()` everywhere, refresh wipes the run.
+- **Save is single-slot and offline-only** — `localStorage['abandon_save_v1']` is overwritten on every save; there's no auto-save, no slot picker, and no save during Host/Join (`saveGame` short-circuits when `netMode !== 'offline'`).
+- **No determinism** — `Math.random()` everywhere, so reloads from before the same wave produce different spawns / drops.
 - **Shop UI doesn't sync across the network yet** — only the host can navigate a shop menu.
 
 ## Where things are documented

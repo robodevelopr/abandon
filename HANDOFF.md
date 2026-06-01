@@ -88,7 +88,16 @@ Ordering is **load-bearing**. The 55 vs 60 gap on cows is deliberate. Eating is 
 - HUD: clock-day, resources line, food line, tools (held tools list), per-player HP + held-item sprite + cycle-key hint, campfire fuel %, message line.
 - Pause: button + **P** key (filtered `e.repeat`, blocked while a menu is open) toggles `gameState.paused`. The gameLoop still runs (rendering + rAF) but skips simulation. Exit button hides UI, resets net state, resets `gameState` resources/day/tools, shows the main menu.
 
+### Save / load
+- Single-slot localStorage save under `SAVE_KEY = 'abandon_save_v1'`.
+- `saveGame()` is offline-only (`netMode === 'offline'`). It serializes `gameState` (excluding transient UI flags), `prevCaveOpen`, mainCampfire fuel/state, every `Player` (position, HP, color, controls, held index), every `Cow` (incl. spawnX/spawnY for tethering), every `Zombie`, every `NPC` (task, tools, earnings), every `Entity` (active + respawnDay + chopProgress), and every `Building`.
+- `loadGame()` is wired to the main menu **Load Saved Game** button. It forces offline mode (closing any open socket), recreates all class instances from the snapshot, and starts the game loop. It rejects mismatched `version`.
+- Save button shows in `startGame` / `loadGame` and is hidden by `exitToMenu`; deliberately not shown by `startNetworkedGame` because the host's authoritative state is changing live.
+
 ## Done since last handoff
+- **Save / load to `localStorage`** — main-menu Load Saved Game button, in-game 💾 SAVE button. Offline-only.
+- **Zombies** (renamed from Monster) — shambling humanoid sprite, spawn from cave on each open transition. First wave = 2; +1 per opening, capped at 12.
+- **NPC helpers** — every 5th cave opening spawns a friendly NPC near the campfire. Interact opens a green NPC menu: assign chop / hunt / idle, buy them an axe/pickaxe/sword (separate from your inventory), collect 25% of their accumulated earnings.
 - World 3200×2400 with scrolling camera (was canvas-sized).
 - 70 procedurally scattered trees, 8 hand-placed rocks, blueprint shop.
 - Trees take 4 hits without an axe (`chopProgress`). Rocks respawn 1d (was 2d).
@@ -109,7 +118,7 @@ Ordering is **load-bearing**. The 55 vs 60 gap on cows is deliberate. Eating is 
 - **No client-side prediction / interpolation** — remote movement is a beat behind. Lerp between snapshots is the right next step.
 - **Cave combat** — still just a flavor message after day 10.
 - **Stone has limited use** — only blueprints consume it. No furnace / upgrades.
-- **No save/load** — exit-to-menu resets `gameState`; refresh wipes the run.
+- **Save slot is single** — `abandon_save_v1` is overwritten on every save. No named slots, no auto-save, no save during network play.
 - **Per-player inventory** — tools and resources are still shared via `gameState`.
 - **No hunger/thirst, SFX, music, or win condition.**
 - **Server has no auth, no rate limits, no TLS** — fine for LAN / trusted use; in front of the public internet you should at least put it behind a reverse proxy.
