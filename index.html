@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Island Survival RPG</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #1a1a1a;
+            color: white;
+            font-family: monospace;
+        }
+        canvas {
+            display: block;
+        }
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            pointer-events: none;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #444;
+        }
+        .ui-stat { margin: 5px 0; font-size: 16px; }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <div class="ui-stat" id="ui-day">Day: 1 (Time: 08:00)</div>
+        <div class="ui-stat" id="ui-resources">Wood: 0 | Stone: 0 | Gold: 0</div>
+        <div class="ui-stat" id="ui-msg" style="color: #ffd700; margin-top: 10px;">Explore the island!</div>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+
+<script>
+/**
+ * Game Engine Architecture
+ * Designed for easy scaling into the 50-level dungeon and NPC management systems.
+ */
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+// --- INPUT MANAGEMENT ---
+const keys = {};
+window.addEventListener('keydown', e => { keys[e.code] = true; });
+window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+// --- GAME STATE ---
+const gameState = {
+    time: 8 * 60, // Start at 8:00 AM (in minutes)
+    day: 1,
+    wood: 0,
+    stone: 0,
+    gold: 0,
+    message: "Welcome to the Island!",
+    messageTimer: 0,
+    showMessage: function(msg) {
+        this.message = msg;
+        this.messageTimer = 180; // Show for ~3 seconds at 60fps
+    }
+};
+
+// --- CLASSES ---
+class Player {
+    constructor(x, y, color, controls) {
+        this.x = x;
+        this.y = y;
+        this.size = 20;
+        this.color = color;
+        this.speed = 4;
+        this.controls = controls; // e.g., { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD', action: 'KeyE' }
+        this.health = 100;
+        this.hunger = 100;
+    }
+
+    update() {
+        if (keys[this.controls.up]) this.y -= this.speed;
+        if (keys[this.controls.down]) this.y += this.speed;
+        if (keys[this.controls.left]) this.x -= this.speed;
+        if (keys[this.controls.right]) this.x += this.speed;
+
+        // Keep bounds
+        this.x = Math.max(this.size, Math.min(canvas.width - this.size, this.x));
+        this.y = Math.max(this.size, Math.min(canvas.height - this.size, this.y));
+    }
+
+    draw(ctx) {
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Draw interaction range
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size * 2.5, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+}
+
+class Entity {
+    constructor(x, y, type) {
+        this.x = x;
+        this.y = y;
+        this.type = type;
+        this.size = 30;
+        this.active = true;
+    }
+
+    draw(ctx) {
+        if (!this.active) return;
+        ctx.save();
+        ctx.translate(this.x, this.y);
+
+        if (this.type === 'tree') {
+            ctx.fillStyle = '#8B4513';
+            ctx.fillRect(-5, -15, 10, 30);
+            ctx.fillStyle = '#228B22';
+            ctx.beginPath();
+            ctx.arc(0, -15, 20, 0, Math.PI * 2);
+            ctx.fill();
+        } else if (this.type === 'shop') {
+            ctx.fillStyle = '#B8860B';
+            ctx.fillRect(-20, -20, 40, 40);
+            ctx.fillStyle = '#FFF';
+            ctx.fillText("SHOP", -12, 5);
+        } else if (this.type === 'cave') {
+            const isNight = isNightTime();
+            ctx.fillStyle = '#555';
+            ctx.beginPath();
+            ctx.arc(0, 0, 30, Math.PI, 0);
+            ctx.fill();
+            ctx.fillStyle = isNight ? '#000' : '#333';
+            ctx.beginPath();
+            ctx.arc(0, 0, 20, Math.PI, 0);
+            ctx.fill();
+            if (!isNight) {
+                ctx.fillStyle = 'red';
+                ctx.fillText("CLOSED", -20, -5);
+            }
+        } else if (this.type === 'campfire') {
+            ctx.fillStyle = '#8B4513';
+            ctx.fillRect(-10, 5, 20, 5);
+            ctx.fillStyle = '#FF4500';
+            ctx.beginPath();
+            ctx.moveTo(-10, 5);
+            ctx.lineTo(0, -15);
+            ctx.lineTo(10, 5);
+            ctx.fill();
+        }
+
+        ctx.restore();
+    }
+}
+
+// --- INITIALIZATION ---
+const p1 = new Player(canvas.width / 2 - 50, canvas.height / 2, '#4CAF50', { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD', action: 'KeyE' });
+const p2 = new Player(canvas.width / 2 + 50, canvas.height / 2, '#2196F3', { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', action: 'Enter' });
+const players = [p1, p2];
+
+const entities = [
+    new Entity(200, 200, 'tree'),
+    new Entity(250, 220, 'tree'),
+    new Entity(800, 150, 'tree'),
+    new Entity(canvas.width - 200, 300, 'shop'),
+    new Entity(canvas.width / 2, 150, 'cave'),
+    new Entity(canvas.width / 2, canvas.height / 2 + 100, 'campfire')
+];
+
+// --- UTILS ---
+function isNightTime() {
+    const hours = Math.floor(gameState.time / 60);
+    return hours >= 20 || hours < 6; // Night is 8 PM to 6 AM
+}
+
+function checkInteractions() {
+    players.forEach((player, index) => {
+        if (keys[player.controls.action]) {
+            // Prevent holding down the button from firing rapidly
+            keys[player.controls.action] = false; 
+
+            entities.forEach(ent => {
+                if (!ent.active) return;
+                const dist = Math.hypot(player.x - ent.x, player.y - ent.y);
+                if (dist < player.size * 2.5 + ent.size) {
+                    
+                    // Interaction Logic
+                    if (ent.type === 'tree') {
+                        ent.active = false;
+                        gameState.wood += 5;
+                        gameState.showMessage(`Player ${index + 1} chopped wood!`);
+                    } else if (ent.type === 'shop') {
+                        gameState.showMessage(`Shop: Weapons & Blueprints coming soon.`);
+                    } else if (ent.type === 'cave') {
+                        if (isNightTime()) {
+                            gameState.showMessage(`Entering Level 1 of the Cave...`);
+                            // TODO: Transition to cave map state
+                        } else {
+                            gameState.showMessage(`The cave is sealed until nightfall.`);
+                        }
+                    }
+                }
+            });
+        }
+    });
+}
+
+function updateUI() {
+    const hours = Math.floor(gameState.time / 60).toString().padStart(2, '0');
+    const minutes = Math.floor(gameState.time % 60).toString().padStart(2, '0');
+    
+    document.getElementById('ui-day').innerText = `Day: ${gameState.day} (Time: ${hours}:${minutes})`;
+    document.getElementById('ui-resources').innerText = `Wood: ${gameState.wood} | Stone: ${gameState.stone} | Gold: ${gameState.gold}`;
+    
+    const msgEl = document.getElementById('ui-msg');
+    if (gameState.messageTimer > 0) {
+        msgEl.innerText = gameState.message;
+        gameState.messageTimer--;
+    } else {
+        msgEl.innerText = "";
+    }
+}
+
+// --- MAIN GAME LOOP ---
+function gameLoop() {
+    // 1. Update Time (1 in-game minute per 2 real frames)
+    gameState.time += 0.5;
+    if (gameState.time >= 24 * 60) {
+        gameState.time = 0;
+        gameState.day++;
+        if (gameState.day === 10) gameState.showMessage("WARNING: Monsters are waking up...");
+    }
+
+    // 2. Update Entities
+    players.forEach(p => p.update());
+    checkInteractions();
+
+    // 3. Render World
+    // Base grass color
+    ctx.fillStyle = '#2E8B57';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Draw Entities
+    entities.forEach(ent => ent.draw(ctx));
+    players.forEach(p => p.draw(ctx));
+
+    // 4. Day/Night Lighting Overlay
+    if (isNightTime()) {
+        // Create darkness layer
+        ctx.fillStyle = 'rgba(0, 0, 50, 0.8)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Erase darkness around light sources (Campfires & Players with hypothetical flashlights)
+        ctx.globalCompositeOperation = 'destination-out';
+        
+        entities.filter(e => e.type === 'campfire').forEach(fire => {
+            const gradient = ctx.createRadialGradient(fire.x, fire.y, 10, fire.x, fire.y, 150);
+            gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+            gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(fire.x, fire.y, 150, 0, Math.PI * 2);
+            ctx.fill();
+        });
+
+        // Small light radius around players
+        players.forEach(p => {
+            const gradient = ctx.createRadialGradient(p.x, p.y, 5, p.x, p.y, 60);
+            gradient.addColorStop(0, 'rgba(255, 255, 255, 0.5)');
+            gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 60, 0, Math.PI * 2);
+            ctx.fill();
+        });
+
+        ctx.globalCompositeOperation = 'source-over'; // Reset blending mode
+    }
+
+    // 5. Update UI Layer
+    updateUI();
+
+    requestAnimationFrame(gameLoop);
+}
+
+// Handle window resizing seamlessly
+window.addEventListener('resize', () => {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+});
+
+// Start loop
+gameLoop();
+</script>
+</body>
+</html>
