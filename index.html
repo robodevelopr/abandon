@@ -88,6 +88,46 @@
             box-shadow: 0 4px 6px rgba(0,0,0,0.5);
         }
         #btn-save:hover { background: rgba(40, 100, 50, 0.95); border-color: #4ec47a; }
+        #host-banner {
+            position: absolute;
+            bottom: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 6;
+            display: none;
+            background: rgba(20, 40, 60, 0.94);
+            border: 2px solid #3498db;
+            color: #ecf0f1;
+            padding: 10px 16px;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 13px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.6);
+            text-align: center;
+            max-width: 90%;
+        }
+        #host-banner b { color: #f1c40f; }
+        #host-banner code {
+            background: #111;
+            padding: 3px 8px;
+            border-radius: 3px;
+            color: #2ecc71;
+            user-select: all;
+            font-size: 13px;
+        }
+        #host-banner button {
+            margin-left: 8px;
+            background: #34495e;
+            border: 1px solid #5d6d7e;
+            color: #ecf0f1;
+            padding: 4px 10px;
+            cursor: pointer;
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: 12px;
+        }
+        #host-banner button:hover { background: #4a627a; }
+        #host-banner .urls { margin-top: 4px; line-height: 1.6; }
         #pause-overlay {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -101,6 +141,21 @@
             letter-spacing: 8px;
             text-shadow: 3px 3px 0 #000;
         }
+        #death-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.88);
+            display: none;
+            z-index: 9;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #c0392b;
+            text-shadow: 5px 5px 0 #000;
+            font-family: inherit;
+        }
+        #death-overlay .you-died { font-size: 96px; letter-spacing: 14px; }
+        #death-overlay .sub { font-size: 18px; color: #ecf0f1; margin-top: 24px; letter-spacing: 4px; }
         
         /* Main Menu UI */
         #main-menu {
@@ -160,6 +215,20 @@
             box-shadow: 0 0 25px rgba(46, 204, 113, 0.55);
             display: none;
         }
+        #flower-menu {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(60, 20, 40, 0.95);
+            border: 3px solid #e91e63;
+            padding: 20px 30px;
+            border-radius: 10px;
+            color: white;
+            min-width: 360px;
+            z-index: 5;
+            box-shadow: 0 0 25px rgba(233, 30, 99, 0.55);
+            display: none;
+        }
         .shop-title { font-size: 24px; color: #f1c40f; text-align: center; margin-bottom: 12px; letter-spacing: 2px; }
         #shop-info { font-size: 14px; color: #bdc3c7; margin-bottom: 12px; border-bottom: 1px solid #555; padding-bottom: 10px; }
         .shop-opt { font-size: 16px; margin: 8px 0; color: #ecf0f1; }
@@ -211,6 +280,18 @@
         <div class="shop-hint">Press 1–4 or ESC. Buildings spawn next to you.</div>
     </div>
 
+    <div id="flower-menu">
+        <div class="shop-title">FLOWER SHOP</div>
+        <div id="flower-info"></div>
+        <div class="shop-opt" id="flower-opt-1">[1] Sell 1 Flower</div>
+        <div class="shop-opt" id="flower-opt-2">[2] Sell 10 Flowers</div>
+        <div class="shop-opt" id="flower-opt-3">[3] Sell ALL Flowers</div>
+        <div class="shop-opt" id="flower-opt-4">[4] Buy Armor</div>
+        <div class="shop-opt" id="flower-opt-5">[5] Buy Shield</div>
+        <div class="shop-opt" id="flower-opt-6">[6] Close</div>
+        <div class="shop-hint">Press 1–6 or ESC</div>
+    </div>
+
     <div id="npc-menu">
         <div class="shop-title">HELPER</div>
         <div id="npc-info"></div>
@@ -225,10 +306,16 @@
         <div class="shop-hint">Press 1–8 or ESC</div>
     </div>
 
+    <div id="host-banner"></div>
+
     <button id="btn-pause" title="P">⏸ PAUSE</button>
     <button id="btn-exit" title="Back to menu">✕ EXIT</button>
     <button id="btn-save" title="Save game">💾 SAVE</button>
     <div id="pause-overlay">PAUSED</div>
+    <div id="death-overlay">
+        <div class="you-died">YOU DIED</div>
+        <div class="sub" id="death-sub">Returning to menu...</div>
+    </div>
 
     <canvas id="gameCanvas"></canvas>
 
@@ -260,22 +347,184 @@ document.getElementById('btn-join').addEventListener('click', () => netStart('cl
 
 // --- SPRITES (inline SVG icons for UI/shop) ---
 const SPRITES = {
-    wood:       `<svg width="16" height="16" viewBox="0 0 16 16"><rect x="2" y="5" width="12" height="6" rx="1" fill="#5c4033"/><rect x="2" y="5" width="12" height="1.5" fill="#7a5a44"/><circle cx="4" cy="8" r="1.2" fill="#3a2820"/><circle cx="11" cy="8" r="1.2" fill="#3a2820"/></svg>`,
-    stone:      `<svg width="16" height="16" viewBox="0 0 16 16"><circle cx="6" cy="9" r="5" fill="#5a6470"/><circle cx="11" cy="7" r="4" fill="#5a6470"/><circle cx="8" cy="5" r="2" fill="#7f8c8d"/></svg>`,
-    gold:       `<svg width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="#f1c40f" stroke="#b9890b" stroke-width="1.2"/><text x="8" y="11" font-size="7" text-anchor="middle" fill="#b9890b" font-family="Courier" font-weight="bold">g</text></svg>`,
-    rawMeat:    `<svg width="16" height="16" viewBox="0 0 16 16"><ellipse cx="8" cy="9" rx="6" ry="4.5" fill="#e74c3c"/><ellipse cx="8" cy="9" rx="2.5" ry="1.3" fill="#ffd0c4"/><circle cx="3" cy="6" r="1.2" fill="#e8a0a0"/></svg>`,
-    cookedMeat: `<svg width="16" height="16" viewBox="0 0 16 16"><ellipse cx="8" cy="9" rx="6" ry="4.5" fill="#8e4520"/><ellipse cx="8" cy="9" rx="2.5" ry="1.3" fill="#5a2a0f"/><circle cx="3" cy="6" r="1.2" fill="#5a2a0f"/></svg>`,
-    axe:        `<svg width="16" height="16" viewBox="0 0 16 16"><rect x="7" y="3" width="2" height="11" fill="#5c4033" transform="rotate(-15 8 8)"/><polygon points="2,3 11,3 11,7 4,7" fill="#bdc3c7" stroke="#555" stroke-width="0.5"/></svg>`,
-    pickaxe:    `<svg width="16" height="16" viewBox="0 0 16 16"><rect x="7" y="5" width="2" height="10" fill="#5c4033"/><path d="M1 5 Q8 1 15 5" stroke="#bdc3c7" stroke-width="2.5" fill="none"/></svg>`,
-    sword:      `<svg width="16" height="16" viewBox="0 0 16 16"><polygon points="7,1 9,1 9,11 8,12 7,11" fill="#bdc3c7" stroke="#555" stroke-width="0.5"/><rect x="5" y="11" width="6" height="1.5" fill="#5c4033"/><rect x="7" y="12.5" width="2" height="3" fill="#5c4033"/></svg>`,
-    hp:         `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M8 14 C0 8 2 2 8 5 C14 2 16 8 8 14 Z" fill="#e74c3c"/></svg>`,
-    fire:       `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M8 15 C2 13 2 8 5 6 C5 8 7 9 8 7 C9 9 11 8 11 6 C14 8 14 13 8 15 Z" fill="#e67e22"/><path d="M8 15 C5 13 5 10 8 9 C11 10 11 13 8 15 Z" fill="#f1c40f"/></svg>`,
-    campfire:   `<svg width="16" height="16" viewBox="0 0 16 16"><rect x="1" y="12" width="14" height="2.5" rx="1" fill="#5c4033"/><rect x="2.5" y="10" width="11" height="2" rx="0.6" fill="#7a5a44"/><path d="M8 11 C3 9 3 5 6 3 C6 5 8 6 8 4 C8 6 10 5 10 3 C13 5 13 9 8 11 Z" fill="#e67e22"/><path d="M8 10 C5 8 5 6 8 5 C11 6 11 8 8 10 Z" fill="#f1c40f"/></svg>`,
-    clock:      `<svg width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="#ecf0f1" stroke="#2c3e50" stroke-width="1"/><line x1="8" y1="8" x2="8" y2="4" stroke="#2c3e50" stroke-width="1.2"/><line x1="8" y1="8" x2="11" y2="9" stroke="#2c3e50" stroke-width="1.2"/></svg>`,
-    hands:      `<svg width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="9" r="5" fill="#f1c27d" stroke="#a0855d" stroke-width="1"/><rect x="6" y="3" width="1.4" height="5" fill="#f1c27d" stroke="#a0855d" stroke-width="0.4"/><rect x="8.6" y="3" width="1.4" height="5" fill="#f1c27d" stroke="#a0855d" stroke-width="0.4"/></svg>`,
+    wood: `<svg width="16" height="16" viewBox="0 0 16 16">
+        <rect x="1" y="4.5" width="14" height="7" rx="1.8" fill="#3a2010"/>
+        <rect x="1" y="5" width="14" height="6" rx="1.6" fill="#7a4a30"/>
+        <rect x="2" y="5.3" width="12" height="1.3" rx="0.4" fill="#a36a44"/>
+        <rect x="1" y="9.6" width="14" height="1.4" rx="0.5" fill="#3a2010"/>
+        <line x1="3" y1="7.6" x2="13" y2="7.6" stroke="#4a2818" stroke-width="0.4"/>
+        <line x1="3" y1="8.7" x2="13" y2="8.7" stroke="#4a2818" stroke-width="0.4"/>
+        <ellipse cx="1.6" cy="8" rx="0.9" ry="2.5" fill="#a06848" stroke="#4a2818" stroke-width="0.3"/>
+        <ellipse cx="1.6" cy="8" rx="0.4" ry="1.4" fill="#5c3a26"/>
+        <ellipse cx="14.4" cy="8" rx="0.9" ry="2.5" fill="#a06848" stroke="#4a2818" stroke-width="0.3"/>
+        <ellipse cx="14.4" cy="8" rx="0.4" ry="1.4" fill="#5c3a26"/>
+    </svg>`,
+    stone: `<svg width="16" height="16" viewBox="0 0 16 16">
+        <ellipse cx="8" cy="14" rx="6" ry="1.3" fill="rgba(0,0,0,0.35)"/>
+        <path d="M2.5 9 L4 5.5 L7.5 3.5 L11 4 L13.5 6.5 L14 10.5 L12 13 L4 13 L2 11 Z" fill="#5a6470" stroke="#2c3540" stroke-width="0.6"/>
+        <path d="M4 5.5 L7.5 3.5 L11 4 L10 6 L6 6 Z" fill="#8a96a3"/>
+        <path d="M11 4 L13.5 6.5 L14 10.5 L11 9 Z" fill="#3d4651"/>
+        <path d="M11 11 L12 13 L7 13 L9 11 Z" fill="#3d4651"/>
+        <path d="M7 6 L8 8.5 L7 11" stroke="#1f262e" stroke-width="0.6" fill="none"/>
+        <circle cx="5.5" cy="8" r="0.4" fill="#bdc3c7"/>
+        <circle cx="11" cy="10" r="0.4" fill="#bdc3c7"/>
+    </svg>`,
+    gold: `<svg width="16" height="16" viewBox="0 0 16 16">
+        <circle cx="8" cy="8.5" r="6.5" fill="rgba(0,0,0,0.25)"/>
+        <circle cx="8" cy="8" r="7" fill="#8b5a06"/>
+        <circle cx="8" cy="8" r="6" fill="#f1c40f"/>
+        <circle cx="8" cy="8" r="4.5" fill="none" stroke="#b8770a" stroke-width="0.6"/>
+        <path d="M4.5 4 Q3.5 6 4.5 8" stroke="#fff4a0" stroke-width="1.3" fill="none" stroke-linecap="round"/>
+        <text x="8" y="11" font-size="7" text-anchor="middle" fill="#8b5a06" font-family="Courier" font-weight="bold">G</text>
+    </svg>`,
+    silver: `<svg width="16" height="16" viewBox="0 0 16 16">
+        <circle cx="8" cy="8.5" r="6.5" fill="rgba(0,0,0,0.25)"/>
+        <circle cx="8" cy="8" r="7" fill="#5d6d7e"/>
+        <circle cx="8" cy="8" r="6" fill="#d8dde0"/>
+        <circle cx="8" cy="8" r="4.5" fill="none" stroke="#7f8c8d" stroke-width="0.6"/>
+        <path d="M4.5 4 Q3.5 6 4.5 8" stroke="#ffffff" stroke-width="1.3" fill="none" stroke-linecap="round"/>
+        <text x="8" y="11" font-size="7" text-anchor="middle" fill="#3d4750" font-family="Courier" font-weight="bold">S</text>
+    </svg>`,
+    rawMeat: `<svg width="16" height="16" viewBox="0 0 16 16">
+        <ellipse cx="9" cy="9" rx="5.5" ry="4.5" fill="#a93226"/>
+        <ellipse cx="9" cy="9" rx="5.5" ry="4.5" fill="none" stroke="#5a1a14" stroke-width="0.6"/>
+        <path d="M6 7 Q9 6 12 7.5" stroke="#e88787" stroke-width="0.7" fill="none"/>
+        <path d="M5.5 10 Q8 11 11.5 10.5" stroke="#e88787" stroke-width="0.5" fill="none"/>
+        <ellipse cx="9" cy="9" rx="2.2" ry="1.2" fill="#ffd0c4"/>
+        <rect x="1.5" y="6.5" width="4" height="2.5" rx="1" fill="#ecf0f1" stroke="#5d6d7e" stroke-width="0.5"/>
+        <circle cx="2" cy="6.5" r="1.2" fill="#ecf0f1" stroke="#5d6d7e" stroke-width="0.5"/>
+        <circle cx="2" cy="9" r="1.2" fill="#ecf0f1" stroke="#5d6d7e" stroke-width="0.5"/>
+    </svg>`,
+    cookedMeat: `<svg width="16" height="16" viewBox="0 0 16 16">
+        <ellipse cx="9" cy="9" rx="5.5" ry="4.5" fill="#5c3210"/>
+        <ellipse cx="9" cy="9" rx="5.5" ry="4.5" fill="none" stroke="#2e1808" stroke-width="0.6"/>
+        <path d="M6 7 Q9 6 12 7.5" stroke="#8a5230" stroke-width="0.7" fill="none"/>
+        <path d="M5.5 10 Q8 11 11.5 10.5" stroke="#8a5230" stroke-width="0.5" fill="none"/>
+        <ellipse cx="9" cy="9" rx="2.2" ry="1.2" fill="#a36842"/>
+        <rect x="1.5" y="6.5" width="4" height="2.5" rx="1" fill="#ecf0f1" stroke="#5d6d7e" stroke-width="0.5"/>
+        <circle cx="2" cy="6.5" r="1.2" fill="#ecf0f1" stroke="#5d6d7e" stroke-width="0.5"/>
+        <circle cx="2" cy="9" r="1.2" fill="#ecf0f1" stroke="#5d6d7e" stroke-width="0.5"/>
+        <path d="M9 4.5 Q9 3 10 2.5 M11 4.5 Q11 3 10.5 2" stroke="#bdc3c7" stroke-width="0.5" fill="none" opacity="0.7"/>
+    </svg>`,
+    axe: `<svg width="16" height="16" viewBox="0 0 16 16">
+        <line x1="2.5" y1="14.5" x2="11" y2="6" stroke="#3a2010" stroke-width="2.6" stroke-linecap="round"/>
+        <line x1="2.5" y1="14.5" x2="11" y2="6" stroke="#7a4a30" stroke-width="1.6" stroke-linecap="round"/>
+        <line x1="3.5" y1="13.5" x2="10.5" y2="6.5" stroke="#a36a44" stroke-width="0.4"/>
+        <path d="M10 1.5 L15 4 L12 7.5 L8 5 Z" fill="#7f8c8d" stroke="#2c3540" stroke-width="0.7"/>
+        <path d="M10 1.5 L15 4 L13 5 L9.5 3 Z" fill="#bdc3c7"/>
+        <line x1="14.5" y1="4.5" x2="12" y2="7.5" stroke="#fff" stroke-width="0.6"/>
+    </svg>`,
+    pickaxe: `<svg width="16" height="16" viewBox="0 0 16 16">
+        <line x1="3" y1="14.5" x2="10" y2="7.5" stroke="#3a2010" stroke-width="2.6" stroke-linecap="round"/>
+        <line x1="3" y1="14.5" x2="10" y2="7.5" stroke="#7a4a30" stroke-width="1.6" stroke-linecap="round"/>
+        <path d="M1.5 3 Q5 4.5 8 6 Q11 4.5 14.5 3 L14 5.5 Q11 6.5 8 7.5 Q5 6.5 2 5.5 Z" fill="#7f8c8d" stroke="#2c3540" stroke-width="0.6"/>
+        <path d="M1.5 3 Q5 4.5 8 6 Q11 4.5 14.5 3 L13.5 4 Q10 5 8 6 Q6 5 2.5 4 Z" fill="#bdc3c7"/>
+        <path d="M14.5 3 L14 5.5" stroke="#fff" stroke-width="0.5"/>
+    </svg>`,
+    sword: `<svg width="16" height="16" viewBox="0 0 16 16">
+        <polygon points="7,1 9,1 9,11 8,12.5 7,11" fill="#bdc3c7" stroke="#2c3540" stroke-width="0.6"/>
+        <line x1="8" y1="2" x2="8" y2="11" stroke="#fff" stroke-width="0.5"/>
+        <polygon points="7,1 8,1 8,12 7,11" fill="#ecf0f1" opacity="0.6"/>
+        <rect x="4" y="10.5" width="8" height="2" rx="0.6" fill="#d4a23a" stroke="#5c4033" stroke-width="0.5"/>
+        <circle cx="4.5" cy="11.5" r="0.6" fill="#fff4d6"/>
+        <circle cx="11.5" cy="11.5" r="0.6" fill="#fff4d6"/>
+        <rect x="7" y="12.5" width="2" height="2.4" fill="#5c4033"/>
+        <line x1="7.5" y1="13" x2="7.5" y2="14.5" stroke="#3a2010" stroke-width="0.4"/>
+        <line x1="8.5" y1="13" x2="8.5" y2="14.5" stroke="#3a2010" stroke-width="0.4"/>
+        <circle cx="8" cy="15" r="1.1" fill="#d4a23a" stroke="#5c4033" stroke-width="0.5"/>
+    </svg>`,
+    shield: `<svg width="16" height="16" viewBox="0 0 16 16">
+        <path d="M8 1 L14 3 L13 9 Q13 13 8 15 Q3 13 3 9 L2 3 Z" fill="#8b5a06"/>
+        <path d="M8 1.5 L13.5 3.3 L12.7 9 Q12.7 12.6 8 14.5 Q3.3 12.6 3.3 9 L2.5 3.3 Z" fill="#bf8a3c"/>
+        <path d="M8 1.5 L13.5 3.3 L12.7 9 Q12.7 12.6 8 14.5 Z" fill="#d4a23a"/>
+        <line x1="8" y1="2.5" x2="8" y2="14" stroke="#5c4033" stroke-width="0.5"/>
+        <line x1="3.5" y1="6.5" x2="12.5" y2="6.5" stroke="#5c4033" stroke-width="0.5"/>
+        <circle cx="8" cy="6.5" r="2.2" fill="#5c4033"/>
+        <circle cx="8" cy="6.5" r="1.6" fill="#fff4d6"/>
+        <circle cx="8" cy="6.5" r="0.8" fill="#d4a23a"/>
+        <path d="M2 3 L8 1 L14 3 L13 9 Q13 13 8 15 Q3 13 3 9 Z" fill="none" stroke="#3a2010" stroke-width="0.8"/>
+    </svg>`,
+    armor: `<svg width="16" height="16" viewBox="0 0 16 16">
+        <path d="M3 4 Q3 3 4 3 L6 2 L10 2 L12 3 Q13 3 13 4 L13 13 Q8 15 3 13 Z" fill="#34495e"/>
+        <path d="M3.5 4 Q3.5 3.3 4.3 3.3 L6.3 2.3 L9.7 2.3 L11.7 3.3 Q12.5 3.3 12.5 4 L12.5 12.8 Q8 14.4 3.5 12.8 Z" fill="#95a5a6"/>
+        <path d="M3.5 4 Q3.5 3.3 4.3 3.3 L6.3 2.3 L8 2.3 L8 13.7 Q5.7 13.5 3.5 12.8 Z" fill="#bdc3c7"/>
+        <line x1="8" y1="3" x2="8" y2="13.5" stroke="#2c3540" stroke-width="0.7"/>
+        <line x1="3.5" y1="7.5" x2="12.5" y2="7.5" stroke="#2c3540" stroke-width="0.4"/>
+        <path d="M6 2 L10 2 L9 4 L7 4 Z" fill="#2c3540"/>
+        <circle cx="5" cy="5" r="0.7" fill="#34495e" stroke="#1c2530" stroke-width="0.3"/>
+        <circle cx="11" cy="5" r="0.7" fill="#34495e" stroke="#1c2530" stroke-width="0.3"/>
+        <circle cx="5" cy="11" r="0.7" fill="#34495e" stroke="#1c2530" stroke-width="0.3"/>
+        <circle cx="11" cy="11" r="0.7" fill="#34495e" stroke="#1c2530" stroke-width="0.3"/>
+    </svg>`,
+    hp: `<svg width="16" height="16" viewBox="0 0 16 16">
+        <path d="M8 14.5 C-0.5 8 1.5 1 8 4.5 C14.5 1 16.5 8 8 14.5 Z" fill="#7a1a1a"/>
+        <path d="M8 14 C0 8 2 2 8 5 C14 2 16 8 8 14 Z" fill="#c0392b"/>
+        <path d="M8 14 C2 8 3 3 8 5.5 L8 14 Z" fill="#e74c3c"/>
+        <path d="M4 4 Q2.5 5.5 3.5 8" stroke="#ff8b8b" stroke-width="1.3" fill="none" stroke-linecap="round"/>
+        <ellipse cx="5" cy="6" rx="0.8" ry="1.2" fill="#ff8b8b" opacity="0.7"/>
+    </svg>`,
+    fire: `<svg width="16" height="16" viewBox="0 0 16 16">
+        <path d="M8 15.5 C1 13 2 6 5.5 4 C5.5 7 7 8 8 6 C8 8 10.5 7 10.5 4 C14 6 15 13 8 15.5 Z" fill="#c0392b"/>
+        <path d="M8 15 C2 13 2.5 7 6 5 C6 7.5 7.5 8 8 6.5 C8.5 8 10 7.5 10 5 C13.5 7 14 13 8 15 Z" fill="#e67e22"/>
+        <path d="M8 15 C4 13 4 9 8 7.5 C12 9 12 13 8 15 Z" fill="#f1c40f"/>
+        <ellipse cx="8" cy="12" rx="1.2" ry="2" fill="#fff9c4"/>
+    </svg>`,
+    campfire: `<svg width="16" height="16" viewBox="0 0 16 16">
+        <ellipse cx="8" cy="14.5" rx="7" ry="1" fill="rgba(0,0,0,0.4)"/>
+        <rect x="1" y="11.5" width="14" height="2.5" rx="1" fill="#3a2010"/>
+        <rect x="1" y="11.5" width="14" height="1.2" rx="0.6" fill="#7a4a30"/>
+        <rect x="2.5" y="9.5" width="11" height="2.2" rx="0.7" fill="#5c3210" transform="rotate(-15 8 10.6)"/>
+        <rect x="2.5" y="9.5" width="11" height="0.9" rx="0.4" fill="#a36a44" transform="rotate(-15 8 10.6)"/>
+        <path d="M8 12.5 C2 10 3 5 6 3 C6 5 7.5 6 8 4 C8.5 6 10 5 10 3 C13 5 14 10 8 12.5 Z" fill="#c0392b"/>
+        <path d="M8 12 C3 10 3.5 6 6.5 4 C6.5 6 7.5 6.5 8 5 C8.5 6.5 9.5 6 9.5 4 C12.5 6 13 10 8 12 Z" fill="#e67e22"/>
+        <path d="M8 11.5 C5 10 5 7 8 6 C11 7 11 10 8 11.5 Z" fill="#f1c40f"/>
+        <ellipse cx="8" cy="9.5" rx="0.9" ry="1.4" fill="#fff9c4"/>
+    </svg>`,
+    clock: `<svg width="16" height="16" viewBox="0 0 16 16">
+        <circle cx="8" cy="8.5" r="6.5" fill="rgba(0,0,0,0.25)"/>
+        <circle cx="8" cy="8" r="7" fill="#2c3e50"/>
+        <circle cx="8" cy="8" r="6.3" fill="#ecf0f1"/>
+        <circle cx="8" cy="8" r="5.6" fill="none" stroke="#bdc3c7" stroke-width="0.3"/>
+        <line x1="8" y1="2.5" x2="8" y2="3.7" stroke="#2c3e50" stroke-width="0.7"/>
+        <line x1="8" y1="12.3" x2="8" y2="13.5" stroke="#2c3e50" stroke-width="0.7"/>
+        <line x1="2.5" y1="8" x2="3.7" y2="8" stroke="#2c3e50" stroke-width="0.7"/>
+        <line x1="12.3" y1="8" x2="13.5" y2="8" stroke="#2c3e50" stroke-width="0.7"/>
+        <line x1="8" y1="8" x2="8" y2="4.5" stroke="#2c3e50" stroke-width="1.4" stroke-linecap="round"/>
+        <line x1="8" y1="8" x2="10.8" y2="9.6" stroke="#e74c3c" stroke-width="1" stroke-linecap="round"/>
+        <circle cx="8" cy="8" r="0.8" fill="#2c3e50"/>
+    </svg>`,
+    hands: `<svg width="16" height="16" viewBox="0 0 16 16">
+        <ellipse cx="8" cy="11" rx="4.7" ry="3.6" fill="#f1c27d" stroke="#a0855d" stroke-width="0.6"/>
+        <ellipse cx="8" cy="10.5" rx="3.5" ry="2.5" fill="#f5d4a0" opacity="0.7"/>
+        <rect x="3.4" y="3" width="1.6" height="6" rx="0.8" fill="#f1c27d" stroke="#a0855d" stroke-width="0.4"/>
+        <rect x="5.7" y="2" width="1.6" height="7" rx="0.8" fill="#f1c27d" stroke="#a0855d" stroke-width="0.4"/>
+        <rect x="8.1" y="2" width="1.6" height="7" rx="0.8" fill="#f1c27d" stroke="#a0855d" stroke-width="0.4"/>
+        <rect x="10.4" y="3" width="1.6" height="6" rx="0.8" fill="#f1c27d" stroke="#a0855d" stroke-width="0.4"/>
+        <ellipse cx="13" cy="9.5" rx="1.5" ry="2.2" fill="#f1c27d" stroke="#a0855d" stroke-width="0.4" transform="rotate(20 13 9.5)"/>
+        <line x1="4.2" y1="4" x2="4.2" y2="8" stroke="#caa069" stroke-width="0.4"/>
+        <line x1="6.5" y1="3" x2="6.5" y2="8" stroke="#caa069" stroke-width="0.4"/>
+        <line x1="8.9" y1="3" x2="8.9" y2="8" stroke="#caa069" stroke-width="0.4"/>
+        <line x1="11.2" y1="4" x2="11.2" y2="8" stroke="#caa069" stroke-width="0.4"/>
+    </svg>`,
+    flower: `<svg width="16" height="16" viewBox="0 0 16 16">
+        <line x1="8" y1="9" x2="8" y2="15.5" stroke="#1e6f3a" stroke-width="1.5"/>
+        <line x1="8" y1="9" x2="8" y2="15.5" stroke="#27ae60" stroke-width="0.6"/>
+        <ellipse cx="10.5" cy="12" rx="2.2" ry="1" fill="#27ae60" stroke="#1e6f3a" stroke-width="0.4" transform="rotate(25 10.5 12)"/>
+        <ellipse cx="5.5" cy="13" rx="1.7" ry="0.8" fill="#27ae60" stroke="#1e6f3a" stroke-width="0.4" transform="rotate(-25 5.5 13)"/>
+        <circle cx="8" cy="2.8" r="2.3" fill="#ff6fa5" stroke="#c2185b" stroke-width="0.4"/>
+        <circle cx="4.5" cy="5" r="2.3" fill="#ff6fa5" stroke="#c2185b" stroke-width="0.4"/>
+        <circle cx="11.5" cy="5" r="2.3" fill="#ff6fa5" stroke="#c2185b" stroke-width="0.4"/>
+        <circle cx="5.5" cy="8.5" r="2.3" fill="#ff6fa5" stroke="#c2185b" stroke-width="0.4"/>
+        <circle cx="10.5" cy="8.5" r="2.3" fill="#ff6fa5" stroke="#c2185b" stroke-width="0.4"/>
+        <circle cx="8" cy="6" r="2.4" fill="#f1c40f" stroke="#b8770a" stroke-width="0.5"/>
+        <circle cx="7" cy="5" r="0.5" fill="#c87f0a"/>
+        <circle cx="8.5" cy="5.5" r="0.5" fill="#c87f0a"/>
+        <circle cx="7.5" cy="7" r="0.5" fill="#c87f0a"/>
+        <circle cx="8.8" cy="6.8" r="0.5" fill="#c87f0a"/>
+    </svg>`,
 };
 
-const HELD_LABEL = { hands: 'Hands', axe: 'Axe', pickaxe: 'Pickaxe', sword: 'Sword', rawMeat: 'Raw meat', cookedMeat: 'Cooked meat' };
+const HELD_LABEL = { hands: 'Hands', axe: 'Axe', pickaxe: 'Pickaxe', sword: 'Sword', shield: 'Shield', rawMeat: 'Raw meat', cookedMeat: 'Cooked meat' };
 
 // --- WORLD / CAMERA ---
 const WORLD_WIDTH = 3200;
@@ -314,17 +563,136 @@ function netSend(obj) {
     }
 }
 
-function netStart(role) {
+// WebRTC ICE-candidate sniff for the local IP. Works even when /lan is
+// unavailable (file:// page, or the running server.js is the old version
+// without the /lan endpoint). Modern browsers often obfuscate the real IP
+// behind an mDNS "<uuid>.local" hostname — we capture both, since .local
+// names are still resolvable on the LAN.
+function detectLanIPsViaWebRTC(timeoutMs = 1500) {
+    if (typeof RTCPeerConnection === 'undefined') return Promise.resolve({ ips: [], mdns: [] });
+    return new Promise(resolve => {
+        const ips = new Set();
+        const mdns = new Set();
+        let done = false;
+        let pc;
+        const finish = () => {
+            if (done) return;
+            done = true;
+            try { pc && pc.close(); } catch (_) {}
+            resolve({ ips: [...ips], mdns: [...mdns] });
+        };
+        try {
+            pc = new RTCPeerConnection({ iceServers: [] });
+            pc.createDataChannel('');
+            pc.onicecandidate = e => {
+                if (!e.candidate) { finish(); return; }
+                const c = e.candidate.candidate || '';
+                // Candidate format: "candidate:... host <addr> <port> typ host ..."
+                // <addr> is either a bare IPv4, an IPv6, or a "<uuid>.local" mDNS name.
+                const parts = c.split(' ');
+                const addr = parts[4];
+                if (!addr) return;
+                if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(addr)) {
+                    if (!addr.startsWith('127.') && addr !== '0.0.0.0') ips.add(addr);
+                } else if (/\.local$/i.test(addr)) {
+                    mdns.add(addr);
+                }
+            };
+            pc.createOffer().then(o => pc.setLocalDescription(o)).catch(() => finish());
+        } catch (_) { finish(); return; }
+        setTimeout(finish, timeoutMs);
+    });
+}
+
+async function netStart(role) {
+    // Hosts: figure out which LAN IPs to show in the relay-URL prompt so the
+    // user can copy a share link before the game starts. Try /lan first
+    // (works when this page was served by server.js), then fall back to a
+    // WebRTC ICE-candidate sniff (works on file:// or against an old server).
+    let lanInfo = null;
+    let lanSource = null;
+    let mdnsHosts = [];
+    if (role === 'host') {
+        try {
+            const r = await fetch('/lan', { cache: 'no-store' });
+            if (r.ok) {
+                const data = await r.json();
+                if (data && Array.isArray(data.ips) && data.ips.length) {
+                    lanInfo = data;
+                    lanSource = 'server';
+                }
+            }
+        } catch (_) { /* fetch may fail if the page is served from file:// */ }
+        if (!lanInfo) {
+            const wr = await detectLanIPsViaWebRTC();
+            mdnsHosts = wr.mdns;
+            if (wr.ips.length) {
+                // file:// has no location.port, so default to the server's
+                // documented default (8080).
+                const port = location.port ? Number(location.port)
+                    : (location.protocol === 'https:' ? 443
+                        : (location.protocol === 'file:' ? 8080 : 80));
+                lanInfo = { ips: wr.ips, port };
+                lanSource = 'webrtc';
+            }
+        }
+    }
+
     // If the page was served over HTTP(S), default to a same-origin ws(s) URL.
     // That makes "just visit the server's URL" the entire setup for a friend.
     const sameOrigin = (location.protocol === 'http:' || location.protocol === 'https:')
         ? `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`
         : 'ws://localhost:8080';
-    const defaultUrl = localStorage.getItem('abandon_url') || sameOrigin;
-    const url = prompt('Relay server URL (use wss:// if hosted on HTTPS):', defaultUrl);
+    let defaultUrl = localStorage.getItem('abandon_url') || sameOrigin;
+
+    let urlPromptMsg = 'Relay server URL (use wss:// if hosted on HTTPS):';
+    if (role === 'host' && lanInfo && lanInfo.ips && lanInfo.ips.length) {
+        const proto = location.protocol === 'https:' ? 'https' : 'http';
+        const wsProto = location.protocol === 'https:' ? 'wss' : 'ws';
+        const port = lanInfo.port;
+        const shareUrls = lanInfo.ips.map(ip => `  ${proto}://${ip}:${port}/`).join('\n');
+        const note = lanSource === 'webrtc'
+            ? '(Detected from your browser. Restart `node server.js` to pick up the new /lan endpoint.)\n\n'
+            : '';
+        urlPromptMsg =
+            `Share one of these URLs with friends on your LAN:\n${shareUrls}\n\n${note}` +
+            `Relay server URL (use wss:// if hosted on HTTPS):`;
+        // Prefill the field with the LAN IP rather than localhost / a stale
+        // cached value — the cached value is probably from a previous run on
+        // a different network.
+        defaultUrl = `${wsProto}://${lanInfo.ips[0]}:${port}`;
+    } else if (role === 'host') {
+        // Couldn't determine the LAN IP from /lan or WebRTC.
+        const isFile = location.protocol === 'file:';
+        const isLocalHost = /^(localhost|127\.|::1$)/.test(location.hostname);
+        const hint = isFile
+            ? `This page is on file://, so /lan isn't reachable.\n` +
+              `Your browser also hid your LAN IP (Chrome/Firefox do this by default).\n` +
+              `Find it manually with \`ip addr\` or \`ifconfig\`, then use\n` +
+              `ws://<your-ip>:8080 below.`
+            : isLocalHost
+                ? `Restart \`node server.js\` so the /lan endpoint loads, or\n` +
+                  `open this page via your machine's LAN IP (e.g. http://192.168.x.x:8080/).`
+                : `Could not detect your LAN IP. Type ws://<your-ip>:<port> below.`;
+        // Surface the mDNS .local hostname if WebRTC gave us one. Friends on
+        // the same LAN can resolve those via Bonjour/Avahi/Zeroconf.
+        const mdnsLine = mdnsHosts.length
+            ? `\n\nBrowser-only mDNS hostname (your friends on the LAN can use this too):\n` +
+              mdnsHosts.map(h => `  ws://${h}:8080`).join('\n')
+            : '';
+        urlPromptMsg =
+            `Could not detect your LAN IP automatically.\n${hint}${mdnsLine}\n\n` +
+            `Relay server URL (use wss:// if hosted on HTTPS):`;
+    }
+
+    const url = prompt(urlPromptMsg, defaultUrl);
     if (!url) return;
     const defaultRoom = localStorage.getItem('abandon_room') || (role === 'host' ? 'room-' + Math.random().toString(36).slice(2, 7) : '');
-    const room = prompt(role === 'host' ? 'Pick a room name (share this with your friend):' : 'Room name to join:', defaultRoom);
+    let roomPromptMsg = role === 'host' ? 'Pick a room name (share this with your friend):' : 'Room name to join:';
+    if (role === 'host' && lanInfo && lanInfo.ips && lanInfo.ips.length) {
+        roomPromptMsg = `Friends use this room name after opening your URL.\n\n${roomPromptMsg}`;
+    }
+    const room = prompt(roomPromptMsg, defaultRoom);
     if (!room) return;
     localStorage.setItem('abandon_url', url);
     localStorage.setItem('abandon_room', room);
@@ -363,6 +731,7 @@ function netOnMessage(msg) {
             netMode = 'host';
             singlePlayer = true; // host starts solo; clients add players as they join
             startNetworkedGame();
+            showHostBanner(msg.room);
         } else {
             netMode = 'client';
             netClientId = msg.clientId;
@@ -387,6 +756,8 @@ function netOnMessage(msg) {
             if ('right' in msg) inp.right = !!msg.right;
             if (msg.actionPress) inp.actionLatch = true;
             if (msg.switchPress) inp.switchLatch = true;
+        } else if (msg.type === 'shop_action') {
+            handleClientShopAction(msg);
         }
     } else if (netMode === 'client') {
         if (msg.type === 'state') {
@@ -394,6 +765,12 @@ function netOnMessage(msg) {
         } else if (msg.type === 'host_left') {
             alert('Host disconnected.');
             exitToMenu();
+        } else if (msg.type === 'menu_open') {
+            if (msg.cid !== netClientId) return;
+            handleRemoteMenuOpen(msg);
+        } else if (msg.type === 'menu_close') {
+            if (msg.cid !== netClientId) return;
+            handleRemoteMenuClose(msg);
         }
     }
 }
@@ -437,6 +814,7 @@ function netBroadcastState() {
         gs: {
             time: gameState.time, day: gameState.day,
             wood: gameState.wood, stone: gameState.stone, gold: gameState.gold,
+            silver: gameState.silver || 0, flowers: gameState.flowers || 0,
             rawMeat: gameState.rawMeat, cookedMeat: gameState.cookedMeat,
             tools: gameState.tools,
             message: gameState.message, messageTimer: gameState.messageTimer,
@@ -451,9 +829,9 @@ function netBroadcastState() {
         })),
         cows: cows.map(c => ({ x: c.x, y: c.y, hp: c.hp, maxHP: c.maxHP, active: c.active, hitFlash: c.hitFlash })),
         zombies: zombies.map(z => ({ x: z.x, y: z.y, hp: z.hp, maxHP: z.maxHP, active: z.active, hitFlash: z.hitFlash })),
-        npcs: npcs.map(n => ({ x: n.x, y: n.y, hp: n.hp, maxHP: n.maxHP, active: n.active, name: n.name, task: n.task, tools: n.tools, earnings: n.earnings, faceDir: n.faceDir })),
-        entities: entities.map(e => ({ x: e.x, y: e.y, t: e.type, a: e.active, cp: e.chopProgress || 0 })),
-        buildings: buildings.map(b => ({ x: b.x, y: b.y, t: b.type, w: b.w, h: b.h })),
+        npcs: npcs.map(n => ({ id: n.id, x: n.x, y: n.y, hp: n.hp, maxHP: n.maxHP, active: n.active, name: n.name, task: n.task, tools: n.tools, earnings: n.earnings, faceDir: n.faceDir })),
+        entities: entities.map(e => ({ x: e.x, y: e.y, t: e.type, a: e.active, cp: e.chopProgress || 0, fc: e.flowerColor })),
+        buildings: buildings.map(b => ({ x: b.x, y: b.y, t: b.type, w: b.w, h: b.h, p: b.placed ? 1 : 0 })),
     });
 }
 
@@ -498,6 +876,7 @@ function applyNetworkState(s) {
 
     npcs = (s.npcs || []).map(nd => {
         const n = new NPC(nd.x, nd.y, nd.name);
+        if (nd.id != null) n.id = nd.id;
         n.hp = nd.hp;
         n.maxHP = nd.maxHP;
         n.active = nd.active;
@@ -512,10 +891,127 @@ function applyNetworkState(s) {
         const e = new Entity(ed.x, ed.y, ed.t);
         e.active = ed.a;
         e.chopProgress = ed.cp;
+        if (ed.fc) e.flowerColor = ed.fc;
         return e;
     });
 
-    buildings = s.buildings.map(bd => new Building(bd.x, bd.y, bd.t, bd.w, bd.h));
+    buildings = s.buildings.map(bd => new Building(bd.x, bd.y, bd.t, bd.w, bd.h, bd.p === undefined ? true : !!bd.p));
+}
+
+// Pop a banner with the LAN URL(s) friends should open to join this host.
+// Tries the server's /lan endpoint first, falls back to the current page's
+// hostname if the fetch fails (e.g., page served from file://).
+async function showHostBanner(room) {
+    const banner = document.getElementById('host-banner');
+    if (!banner) return;
+    const proto = location.protocol === 'https:' ? 'https' : 'http';
+    let urls = [];
+    try {
+        const r = await fetch('/lan', { cache: 'no-store' });
+        if (r.ok) {
+            const data = await r.json();
+            const port = data.port || (location.port || (location.protocol === 'https:' ? 443 : 80));
+            urls = (data.ips || []).map(ip => `${proto}://${ip}:${port}/`);
+        }
+    } catch (_) { /* fall through to the fallback */ }
+    if (!urls.length) urls = [`${proto}://${location.host}/`];
+
+    const urlHtml = urls.map(u => `<code>${u}</code>`).join('<br>');
+    banner.innerHTML =
+        `Hosting room <b>${room}</b>. Share with friends:` +
+        `<div class="urls">${urlHtml}</div>` +
+        `Friends open the URL, click <b>Join Network Game</b>, and enter room <b>${room}</b>.` +
+        ` <button id="host-banner-copy">Copy URL</button>` +
+        ` <button id="host-banner-close">×</button>`;
+    banner.style.display = 'block';
+    banner._urls = urls;
+
+    document.getElementById('host-banner-copy').onclick = async () => {
+        try { await navigator.clipboard.writeText(urls[0]); }
+        catch (_) { /* clipboard might be blocked */ }
+    };
+    document.getElementById('host-banner-close').onclick = () => {
+        banner.style.display = 'none';
+    };
+}
+
+function hideHostBanner() {
+    const banner = document.getElementById('host-banner');
+    if (banner) banner.style.display = 'none';
+}
+
+// Host: execute a shop action a client just sent. Validates that the menu is
+// actually open for that client before running anything that touches gameState.
+function handleClientShopAction(msg) {
+    const cid = msg.clientId;
+    if (msg.kind === 'shop') {
+        if (gameState.shopOwnerCid !== cid) return;
+        if (msg.action === 'sell_wood') shopSellWood(msg.amount);
+        else if (msg.action === 'buy') shopBuy(msg.tool);
+        else if (msg.action === 'close') closeShop();
+    } else if (msg.kind === 'blueprint_shop') {
+        if (gameState.blueprintShopOwnerCid !== cid) return;
+        if (msg.action === 'buy') buyBlueprint(msg.bp);
+        else if (msg.action === 'close') closeBlueprintShop();
+    } else if (msg.kind === 'flower_shop') {
+        if (gameState.flowerShopOwnerCid !== cid) return;
+        if (msg.action === 'sell') flowerSell(msg.amount);
+        else if (msg.action === 'buy') flowerBuy(msg.tool);
+        else if (msg.action === 'close') closeFlowerShop();
+    } else if (msg.kind === 'npc') {
+        if (gameState.npcMenuOwnerCid !== cid) return;
+        if (msg.action === 'set_task') npcSetTask(msg.task);
+        else if (msg.action === 'buy_tool') npcBuyTool(msg.tool, msg.price);
+        else if (msg.action === 'collect') npcCollectShare();
+        else if (msg.action === 'close') closeNPCMenu();
+    }
+}
+
+// Client: a menu was opened for me on the host — show the corresponding UI.
+function handleRemoteMenuOpen(msg) {
+    if (msg.kind === 'shop') {
+        gameState.shopOpen = true;
+        gameState.shopOwnerCid = netClientId;
+        showShopLocally(msg.buyer || 'You');
+    } else if (msg.kind === 'blueprint_shop') {
+        gameState.blueprintShopOpen = true;
+        gameState.blueprintShopOwnerCid = netClientId;
+        showBpLocally({ name: msg.buyer || 'You' });
+    } else if (msg.kind === 'flower_shop') {
+        gameState.flowerShopOpen = true;
+        gameState.flowerShopOwnerCid = netClientId;
+        showFlowerLocally({ name: msg.buyer || 'You' });
+    } else if (msg.kind === 'npc') {
+        gameState.npcMenuOpen = true;
+        gameState.activeNPCId = msg.npcId;
+        gameState.npcMenuOwnerCid = netClientId;
+        const npc = npcs.find(n => n.id === msg.npcId) || null;
+        showNpcMenuLocally(npc, { name: msg.buyer || 'You' });
+    }
+}
+
+// Client: the host says my menu is now closed — hide the UI without echoing
+// the close back (otherwise host and client ping each other forever).
+function handleRemoteMenuClose(msg) {
+    if (msg.kind === 'shop') {
+        gameState.shopOpen = false;
+        gameState.shopOwnerCid = null;
+        document.getElementById('shop-menu').style.display = 'none';
+    } else if (msg.kind === 'blueprint_shop') {
+        gameState.blueprintShopOpen = false;
+        gameState.blueprintShopOwnerCid = null;
+        document.getElementById('bp-menu').style.display = 'none';
+    } else if (msg.kind === 'flower_shop') {
+        gameState.flowerShopOpen = false;
+        gameState.flowerShopOwnerCid = null;
+        document.getElementById('flower-menu').style.display = 'none';
+    } else if (msg.kind === 'npc') {
+        gameState.npcMenuOpen = false;
+        gameState.activeNPC = null;
+        gameState.activeNPCId = null;
+        gameState.npcMenuOwnerCid = null;
+        document.getElementById('npc-menu').style.display = 'none';
+    }
 }
 
 function startNetworkedGame() {
@@ -552,13 +1048,20 @@ const gameState = {
     wood: 0,
     stone: 0,
     gold: 50, // Starting gold so the shop is usable early
+    silver: 0,
+    flowers: 0,
     rawMeat: 0,
     cookedMeat: 0,
-    tools: { axe: false, pickaxe: false, sword: false },
+    tools: { axe: false, pickaxe: false, sword: false, armor: false, shield: false },
     shopOpen: false,
     blueprintShopOpen: false,
+    flowerShopOpen: false,
     npcMenuOpen: false,
     paused: false,
+    // After buying a blueprint, this holds { type, w, h, buyer } until the
+    // buyer presses F to drop the ghost — that's how the player chooses where
+    // to put it. Esc cancels (refunds materials).
+    placingBuilding: null,
     caveOpenings: 0,
     encounters: 0,          // nights where you killed at least one zombie
     zombiesKilledTonight: 0,
@@ -570,7 +1073,20 @@ const gameState = {
     }
 };
 
-function isMenuOpen() { return gameState.shopOpen || gameState.blueprintShopOpen || gameState.npcMenuOpen; }
+function isMenuOpen() { return gameState.shopOpen || gameState.blueprintShopOpen || gameState.flowerShopOpen || gameState.npcMenuOpen; }
+
+let deathTimeoutId = null;
+function triggerDeath(player) {
+    if (gameState.deathTriggered) return;
+    gameState.deathTriggered = true;
+    document.getElementById('death-overlay').style.display = 'flex';
+    gameState.showMessage(`${player.name} died.`);
+    // Wait 5 seconds, then bail to the main menu.
+    deathTimeoutId = setTimeout(() => {
+        deathTimeoutId = null;
+        if (gameRunning) exitToMenu();
+    }, 5000);
+}
 
 function togglePause() {
     if (!gameRunning) return;
@@ -604,7 +1120,15 @@ function exitToMenu() {
     gameState.paused = false;
     gameState.shopOpen = false;
     gameState.blueprintShopOpen = false;
+    gameState.flowerShopOpen = false;
     gameState.npcMenuOpen = false;
+    gameState.shopOwnerCid = null;
+    gameState.blueprintShopOwnerCid = null;
+    gameState.flowerShopOwnerCid = null;
+    gameState.npcMenuOwnerCid = null;
+    gameState.activeNPC = null;
+    gameState.activeNPCId = null;
+    gameState.placingBuilding = null;
     gameState.caveOpenings = 0;
     gameState.encounters = 0;
     gameState.zombiesKilledTonight = 0;
@@ -615,8 +1139,13 @@ function exitToMenu() {
     document.getElementById('pause-overlay').style.display = 'none';
     document.getElementById('shop-menu').style.display = 'none';
     document.getElementById('bp-menu').style.display = 'none';
+    document.getElementById('flower-menu').style.display = 'none';
+    document.getElementById('death-overlay').style.display = 'none';
     document.getElementById('btn-pause').textContent = '⏸ PAUSE';
     document.getElementById('main-menu').style.display = 'flex';
+    hideHostBanner();
+    if (deathTimeoutId) { clearTimeout(deathTimeoutId); deathTimeoutId = null; }
+    gameState.deathTriggered = false;
 
     // Reset run-specific state so a fresh game starts clean.
     gameState.time = 8 * 60;
@@ -624,9 +1153,11 @@ function exitToMenu() {
     gameState.wood = 0;
     gameState.stone = 0;
     gameState.gold = 50;
+    gameState.silver = 0;
+    gameState.flowers = 0;
     gameState.rawMeat = 0;
     gameState.cookedMeat = 0;
-    gameState.tools = { axe: false, pickaxe: false, sword: false };
+    gameState.tools = { axe: false, pickaxe: false, sword: false, armor: false, shield: false };
     gameState.message = "Find the shopkeeper!";
     gameState.messageTimer = 300;
 }
@@ -656,6 +1187,8 @@ function saveGame() {
             wood: gameState.wood,
             stone: gameState.stone,
             gold: gameState.gold,
+            silver: gameState.silver || 0,
+            flowers: gameState.flowers || 0,
             rawMeat: gameState.rawMeat,
             cookedMeat: gameState.cookedMeat,
             tools: { ...gameState.tools },
@@ -686,8 +1219,9 @@ function saveGame() {
         entities: entities.map(e => ({
             x: e.x, y: e.y, type: e.type, active: e.active,
             respawnDay: e.respawnDay, chopProgress: e.chopProgress || 0,
+            flowerColor: e.flowerColor,
         })),
-        buildings: buildings.map(b => ({ x: b.x, y: b.y, type: b.type, w: b.w, h: b.h })),
+        buildings: buildings.map(b => ({ x: b.x, y: b.y, type: b.type, w: b.w, h: b.h, placed: b.placed })),
     };
     try {
         localStorage.setItem(SAVE_KEY, JSON.stringify(snap));
@@ -732,12 +1266,22 @@ function loadGame() {
 
     // gameState scalars + tools
     Object.assign(gameState, snap.gameState);
-    gameState.tools = { ...snap.gameState.tools };
+    gameState.silver = snap.gameState.silver || 0;
+    gameState.flowers = snap.gameState.flowers || 0;
+    // Merge tools defensively so older saves without armor/shield keys still work.
+    gameState.tools = { axe: false, pickaxe: false, sword: false, armor: false, shield: false, ...snap.gameState.tools };
     gameState.message = `Loaded save (Day ${snap.gameState.day}).`;
     gameState.messageTimer = 300;
     gameState.shopOpen = false;
     gameState.blueprintShopOpen = false;
+    gameState.flowerShopOpen = false;
     gameState.npcMenuOpen = false;
+    gameState.shopOwnerCid = null;
+    gameState.blueprintShopOwnerCid = null;
+    gameState.flowerShopOwnerCid = null;
+    gameState.npcMenuOwnerCid = null;
+    gameState.activeNPC = null;
+    gameState.activeNPCId = null;
     gameState.paused = false;
     prevCaveOpen = !!snap.prevCaveOpen;
     prevNight = !!snap.prevNight;
@@ -788,10 +1332,11 @@ function loadGame() {
         e.active = ed.active;
         e.respawnDay = ed.respawnDay;
         e.chopProgress = ed.chopProgress;
+        if (ed.flowerColor) e.flowerColor = ed.flowerColor;
         return e;
     });
 
-    buildings = (snap.buildings || []).map(bd => new Building(bd.x, bd.y, bd.type, bd.w, bd.h));
+    buildings = (snap.buildings || []).map(bd => new Building(bd.x, bd.y, bd.type, bd.w, bd.h, bd.placed === undefined ? true : !!bd.placed));
 
     gameRunning = true;
     gameLoop();
@@ -804,6 +1349,22 @@ document.getElementById('btn-load').addEventListener('click', loadGame);
 const keys = {};
 window.addEventListener('keydown', e => { keys[e.code] = true; });
 window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+// Esc while placing a blueprint = cancel + refund materials.
+window.addEventListener('keydown', e => {
+    if (e.code !== 'Escape') return;
+    if (!gameState.placingBuilding) return;
+    if (isMenuOpen()) return; // let menu handlers consume Esc first
+    const pb = gameState.placingBuilding;
+    const bp = BLUEPRINTS[pb.type];
+    if (bp) {
+        gameState.wood  += bp.cost.wood;
+        gameState.stone += bp.cost.stone;
+        gameState.gold  += bp.cost.gold;
+    }
+    gameState.placingBuilding = null;
+    gameState.showMessage(`Cancelled placement — materials refunded.`);
+});
 
 // Held-item cycle: single-press only (e.repeat skips auto-repeat firings).
 window.addEventListener('keydown', e => {
@@ -849,6 +1410,7 @@ class Player {
         if (gameState.tools.axe) items.push('axe');
         if (gameState.tools.pickaxe) items.push('pickaxe');
         if (gameState.tools.sword) items.push('sword');
+        if (gameState.tools.shield) items.push('shield');
         if (gameState.cookedMeat > 0) items.push('cookedMeat');
         if (gameState.rawMeat > 0) items.push('rawMeat');
         return items;
@@ -872,6 +1434,7 @@ class Player {
     }
 
     update() {
+        if (this.downed) return; // can't move while waiting for a revive
         if (isMenuOpen()) return; // freeze while menu open
         const inp = this.networkInput || {
             up:    !!keys[this.controls.up],
@@ -903,13 +1466,25 @@ class Player {
     }
 
     damage(amount) {
+        if (this.downed) return; // already on the ground — no double-killing
+        // Armor is passive (-40%). Shield only applies if it's currently the
+        // held item (-50% on top). Both stack multiplicatively, capped to a
+        // minimum of 1 HP so a hit always registers.
+        let mult = 1.0;
+        if (gameState.tools.armor) mult *= 0.6;
+        if (gameState.tools.shield && this.getHeldItem() === 'shield') mult *= 0.5;
+        amount = Math.max(1, Math.ceil(amount * mult));
         this.hp = Math.max(0, this.hp - amount);
         if (this.hp <= 0) {
-            // Respawn at campfire with half health
-            this.x = mainCampfire.x + (Math.random() - 0.5) * 60;
-            this.y = mainCampfire.y + (Math.random() - 0.5) * 60;
-            this.hp = 50;
-            gameState.showMessage(`${this.name} collapsed and woke up at the campfire.`);
+            this.hp = 0;
+            if (players.length > 1) {
+                this.downed = true;
+                gameState.showMessage(`${this.name} is down — a teammate must revive!`);
+                // If every player is now down, nobody can revive — game over.
+                if (players.every(p => p.downed)) triggerDeath(this);
+            } else {
+                triggerDeath(this);
+            }
         }
     }
 
@@ -920,6 +1495,11 @@ class Player {
     draw(ctx) {
         ctx.save();
         ctx.translate(this.x, this.y);
+        if (this.downed) {
+            // Lay sideways and dim the sprite so it reads as "knocked out".
+            ctx.rotate(Math.PI / 2);
+            ctx.globalAlpha = 0.55;
+        }
 
         // Shadow
         ctx.fillStyle = 'rgba(0,0,0,0.3)';
@@ -933,7 +1513,7 @@ class Player {
 
         // Pants
         ctx.fillStyle = this.secColor;
-        ctx.fillRect(-10, 10, 20, 8); 
+        ctx.fillRect(-10, 10, 20, 8);
 
         // Head
         ctx.fillStyle = '#f1c27d'; // Skin tone
@@ -979,6 +1559,25 @@ class Player {
                 ctx.fillStyle = '#5c4033';
                 ctx.fillRect(off - 3, 4, 6, 2);
                 ctx.fillRect(off - 1, 6, 2, 4);
+            } else if (held === 'shield') {
+                // Kite-shaped shield held to the side
+                ctx.fillStyle = '#bf8a3c';
+                ctx.beginPath();
+                ctx.moveTo(off, -10);
+                ctx.lineTo(off + 8, -7);
+                ctx.lineTo(off + 6, 6);
+                ctx.quadraticCurveTo(off, 12, off - 6, 6);
+                ctx.lineTo(off - 8, -7);
+                ctx.closePath();
+                ctx.fill();
+                ctx.strokeStyle = '#5c4033';
+                ctx.lineWidth = 1.2;
+                ctx.stroke();
+                ctx.fillStyle = '#d4a23a';
+                ctx.fillRect(off - 1, -8, 2, 14);
+                ctx.fillRect(off - 5, -2, 10, 2);
+                ctx.fillStyle = '#fff8d0';
+                ctx.beginPath(); ctx.arc(off, 0, 1.8, 0, Math.PI * 2); ctx.fill();
             } else if (held === 'rawMeat') {
                 ctx.fillStyle = '#e74c3c';
                 ctx.beginPath();
@@ -1001,6 +1600,18 @@ class Player {
         }
 
         ctx.restore();
+        if (this.downed) {
+            // "DOWN — press F" badge above the body, drawn unrotated.
+            ctx.save();
+            ctx.translate(this.x, this.y);
+            ctx.fillStyle = '#000';
+            ctx.font = 'bold 11px Courier';
+            ctx.textAlign = 'center';
+            ctx.fillText('DOWN — press F', 1, -27);
+            ctx.fillStyle = '#e74c3c';
+            ctx.fillText('DOWN — press F', 0, -28);
+            ctx.restore();
+        }
     }
 }
 
@@ -1078,11 +1689,13 @@ class Entity {
         ctx.save();
         ctx.translate(this.x, this.y);
 
-        // Shadow for all entities
-        ctx.fillStyle = 'rgba(0,0,0,0.4)';
-        ctx.beginPath();
-        ctx.ellipse(0, 15, 25, 10, 0, 0, Math.PI * 2);
-        ctx.fill();
+        // Shadow for all entities (flowers get a smaller one of their own)
+        if (this.type !== 'flower') {
+            ctx.fillStyle = 'rgba(0,0,0,0.4)';
+            ctx.beginPath();
+            ctx.ellipse(0, 15, 25, 10, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
 
         if (this.type === 'rock') {
             ctx.fillStyle = '#5a6470';
@@ -1101,6 +1714,76 @@ class Entity {
             ctx.arc(-15, -15, 20, 0, Math.PI * 2);
             ctx.arc(15, -15, 20, 0, Math.PI * 2);
             ctx.fill();
+        } else if (this.type === 'flower') {
+            const c = this.flowerColor || '#ff6fa5';
+            // Mini shadow
+            ctx.fillStyle = 'rgba(0,0,0,0.25)';
+            ctx.beginPath(); ctx.ellipse(0, 10, 7, 2.5, 0, 0, Math.PI * 2); ctx.fill();
+            // Stem
+            ctx.strokeStyle = '#1e6f3a';
+            ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(0, 10); ctx.lineTo(0, -2); ctx.stroke();
+            // Leaf
+            ctx.fillStyle = '#27ae60';
+            ctx.beginPath(); ctx.ellipse(4, 5, 4, 2, 0.4, 0, Math.PI * 2); ctx.fill();
+            // Five petals
+            ctx.fillStyle = c;
+            for (let i = 0; i < 5; i++) {
+                const a = i * (Math.PI * 2 / 5) - Math.PI / 2;
+                ctx.beginPath();
+                ctx.arc(Math.cos(a) * 5, -4 + Math.sin(a) * 5, 4, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            // Pollen center
+            ctx.fillStyle = '#f1c40f';
+            ctx.beginPath(); ctx.arc(0, -4, 2.5, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#c87f0a';
+            ctx.beginPath(); ctx.arc(-1, -5, 0.6, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(1, -3, 0.6, 0, Math.PI * 2); ctx.fill();
+        } else if (this.type === 'flower_shop') {
+            // Pink cottage walls
+            ctx.fillStyle = '#fce4ec';
+            ctx.fillRect(-32, -10, 64, 32);
+            ctx.fillStyle = '#e91e63';
+            ctx.fillRect(-32, -10, 64, 4);
+            ctx.fillRect(-32, 18, 64, 4);
+            // Mossy green roof
+            ctx.fillStyle = '#27ae60';
+            ctx.beginPath();
+            ctx.moveTo(-38, -8);
+            ctx.lineTo(0, -36);
+            ctx.lineTo(38, -8);
+            ctx.closePath();
+            ctx.fill();
+            ctx.fillStyle = '#1e8449';
+            ctx.fillRect(-36, -10, 72, 3);
+            // Flower boxes under windows
+            ctx.fillStyle = '#5c4033';
+            ctx.fillRect(-28, 6, 14, 5);
+            ctx.fillRect(14, 6, 14, 5);
+            const blooms = ['#ff6fa5', '#f1c40f', '#9b59b6', '#e74c3c'];
+            for (let i = 0; i < 4; i++) {
+                ctx.fillStyle = blooms[i % blooms.length];
+                ctx.beginPath(); ctx.arc(-25 + i * 4, 5, 1.6, 0, Math.PI * 2); ctx.fill();
+                ctx.beginPath(); ctx.arc(17 + i * 4, 5, 1.6, 0, Math.PI * 2); ctx.fill();
+            }
+            // Door
+            ctx.fillStyle = '#5c4033';
+            ctx.fillRect(-7, 6, 14, 16);
+            ctx.fillStyle = '#f1c40f';
+            ctx.beginPath(); ctx.arc(4, 14, 1.2, 0, Math.PI * 2); ctx.fill();
+            // Hanging sign
+            ctx.fillStyle = '#5c4033';
+            ctx.fillRect(-1, -42, 2, 6);
+            ctx.fillStyle = '#fce4ec';
+            ctx.fillRect(-26, -50, 52, 10);
+            ctx.strokeStyle = '#c2185b';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(-26, -50, 52, 10);
+            ctx.fillStyle = '#c2185b';
+            ctx.font = 'bold 9px Courier';
+            ctx.textAlign = 'center';
+            ctx.fillText("FLOWERS", 0, -42);
         } else if (this.type === 'shop') {
             // Walls
             ctx.fillStyle = '#d4a574';
@@ -1415,10 +2098,10 @@ class Zombie {
         if (this.attackCooldown > 0) this.attackCooldown--;
         this.shamble += 0.12;
 
-        // Nearest living player target
+        // Nearest living player target — skip downed/dead players.
         let target = null, bestDist = Infinity;
         for (const p of players) {
-            if (p.hp <= 0) continue;
+            if (p.hp <= 0 || p.downed) continue;
             const d = Math.hypot(this.x - p.x, this.y - p.y);
             if (d < bestDist) { target = p; bestDist = d; }
         }
@@ -1434,13 +2117,13 @@ class Zombie {
             const prevX = this.x, prevY = this.y;
             this.x += (dx / dist) * this.speed + swayX;
             this.y += (dy / dist) * this.speed + swayY;
-            // Wall collide so zombies can't phase through buildings — making
-            // them an actual shelter.
+            // Zombies can't fit through the doorway, so to them every wall is
+            // solid — buildings function as real shelter.
             const radius = 10;
             for (const b of buildings) {
-                if (!b.collides(this.x, this.y, radius)) continue;
-                if (!b.collides(prevX, this.y, radius))      this.x = prevX;
-                else if (!b.collides(this.x, prevY, radius)) this.y = prevY;
+                if (!b.zombieCollides(this.x, this.y, radius)) continue;
+                if (!b.zombieCollides(prevX, this.y, radius))      this.x = prevX;
+                else if (!b.zombieCollides(this.x, prevY, radius)) this.y = prevY;
                 else { this.x = prevX; this.y = prevY; }
             }
         } else if (this.attackCooldown === 0) {
@@ -1548,8 +2231,10 @@ class Zombie {
     }
 }
 
+let nextNpcId = 1;
 class NPC {
     constructor(x, y, name) {
+        this.id = nextNpcId++;
         this.x = x;
         this.y = y;
         this.name = name;
@@ -1564,15 +2249,57 @@ class NPC {
         this.workTimer = 0;
         this.hitFlash = 0;
         this.faceDir = 'down';
+        // Night assignment: either a Building reference or the campfire. Cleared
+        // at dawn so a fresh assignment runs the next night.
+        this.nightHome = null;             // null | { type: 'building', ref: <Building> } | { type: 'campfire' }
     }
 
     update() {
         if (!this.active) return;
         if (this.hitFlash > 0) this.hitFlash--;
 
+        if (isNightTime()) {
+            // At night each NPC heads home: an unclaimed house first, otherwise
+            // the campfire. They stand there until morning.
+            if (!this.nightHome || (this.nightHome.type === 'building' && !this.nightHome.ref.placed)) {
+                this._claimNightHome();
+            }
+            this._goHome();
+            return;
+        }
+
+        // Daytime: clear last night's home assignment and do whatever task was
+        // set during the previous night.
+        this.nightHome = null;
         if (this.task === 'chop' && this.tools.axe) this._workOnTree();
         else if (this.task === 'hunt' && this.tools.sword) this._workOnCow();
         // else: idle, just stand around
+    }
+
+    _claimNightHome() {
+        // First unclaimed placed building wins; otherwise fall back to the
+        // campfire. Iterating npcs (excluding self) gives a consistent
+        // claim-order across ticks.
+        const claimed = new Set();
+        for (const n of npcs) {
+            if (n === this || !n.active) continue;
+            if (n.nightHome && n.nightHome.type === 'building') claimed.add(n.nightHome.ref);
+        }
+        const free = buildings.find(b => b.placed && !claimed.has(b));
+        this.nightHome = free ? { type: 'building', ref: free } : { type: 'campfire' };
+    }
+
+    _goHome() {
+        if (!this.nightHome) return;
+        let tx, ty;
+        if (this.nightHome.type === 'building') {
+            tx = this.nightHome.ref.x;
+            ty = this.nightHome.ref.y;
+        } else {
+            tx = mainCampfire.x;
+            ty = mainCampfire.y - 30; // stand just north of the fire pit
+        }
+        this._moveToward(tx, ty, 8);
     }
 
     _moveToward(tx, ty, arriveDist) {
@@ -1738,14 +2465,19 @@ class NPC {
 }
 
 class Building {
-    constructor(x, y, type, w, h) {
+    constructor(x, y, type, w, h, placed = true) {
         this.x = x;
         this.y = y;
         this.type = type;
         this.w = w;
         this.h = h;
+        // placed=false means this is a translucent blueprint preview that the
+        // player must walk up to and confirm. Until placed, it has no collision
+        // and offers no shelter.
+        this.placed = placed;
     }
     contains(p) {
+        if (!this.placed) return false;
         return p.x > this.x - this.w / 2 && p.x < this.x + this.w / 2
             && p.y > this.y - this.h / 2 && p.y < this.y + this.h / 2;
     }
@@ -1768,9 +2500,33 @@ class Building {
 
     // True if a circle (px, py, radius) overlaps any wall rect.
     collides(px, py, radius) {
+        if (!this.placed) return false;
         const lx = px - this.x;
         const ly = py - this.y;
         for (const w of this.walls()) {
+            if (lx + radius > w.x1 && lx - radius < w.x2 &&
+                ly + radius > w.y1 && ly - radius < w.y2) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Zombies can't fit through the doorway — to them, the bottom wall is
+    // solid. That makes the building an actual shelter for the player.
+    zombieCollides(px, py, radius) {
+        if (!this.placed) return false;
+        const lx = px - this.x;
+        const ly = py - this.y;
+        const halfW = this.w / 2, halfH = this.h / 2;
+        const thick = 6;
+        const sealedWalls = [
+            { x1: -halfW,         y1: -halfH,          x2:  halfW,         y2: -halfH + thick }, // top
+            { x1: -halfW,         y1: -halfH + thick,  x2: -halfW + thick, y2:  halfH - thick }, // left
+            { x1:  halfW - thick, y1: -halfH + thick,  x2:  halfW,         y2:  halfH - thick }, // right
+            { x1: -halfW,         y1:  halfH - thick,  x2:  halfW,         y2:  halfH },         // bottom (no door gap)
+        ];
+        for (const w of sealedWalls) {
             if (lx + radius > w.x1 && lx - radius < w.x2 &&
                 ly + radius > w.y1 && ly - radius < w.y2) {
                 return true;
@@ -1782,6 +2538,48 @@ class Building {
         ctx.save();
         ctx.translate(this.x, this.y);
         const w = this.w, h = this.h;
+        if (!this.placed) {
+            // Blueprint preview: translucent blue grid + label
+            ctx.globalAlpha = 0.55;
+            ctx.fillStyle = 'rgba(52, 152, 219, 0.35)';
+            ctx.fillRect(-w/2, -h/2, w, h);
+            ctx.strokeStyle = '#3498db';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([6, 4]);
+            ctx.strokeRect(-w/2, -h/2, w, h);
+            ctx.setLineDash([]);
+            // Inner grid
+            ctx.strokeStyle = 'rgba(52, 152, 219, 0.55)';
+            ctx.lineWidth = 0.8;
+            for (let xx = -w/2 + 20; xx < w/2; xx += 20) {
+                ctx.beginPath(); ctx.moveTo(xx, -h/2 + 4); ctx.lineTo(xx, h/2 - 4); ctx.stroke();
+            }
+            for (let yy = -h/2 + 20; yy < h/2; yy += 20) {
+                ctx.beginPath(); ctx.moveTo(-w/2 + 4, yy); ctx.lineTo(w/2 - 4, yy); ctx.stroke();
+            }
+            // Door marker on the bottom
+            ctx.strokeStyle = '#f1c40f';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(-11, h/2);
+            ctx.lineTo(11, h/2);
+            ctx.stroke();
+            // Label
+            ctx.globalAlpha = 1;
+            ctx.fillStyle = '#f1c40f';
+            ctx.font = 'bold 11px Courier';
+            ctx.textAlign = 'center';
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 3;
+            ctx.strokeText('BLUEPRINT', 0, -4);
+            ctx.fillText('BLUEPRINT', 0, -4);
+            ctx.fillStyle = '#ecf0f1';
+            ctx.font = '9px Courier';
+            ctx.strokeText('Press F to build', 0, 10);
+            ctx.fillText('Press F to build', 0, 10);
+            ctx.restore();
+            return;
+        }
         // Shadow
         ctx.fillStyle = 'rgba(0,0,0,0.35)';
         ctx.beginPath(); ctx.ellipse(0, h/2 + 5, w/2 + 4, 9, 0, 0, Math.PI * 2); ctx.fill();
@@ -1848,6 +2646,7 @@ class Building {
     }
     drawRoof(ctx, alpha) {
         if (alpha <= 0) return;
+        if (!this.placed) return;
         ctx.save();
         ctx.translate(this.x, this.y);
         ctx.globalAlpha = alpha;
@@ -1910,8 +2709,10 @@ let buildings = [];
 let mainCampfire;
 let prevCaveOpen = false;       // edge-detect cave open transitions for wave spawning
 let prevNight = false;          // edge-detect night→day transitions for encounter counter
+let fireOutSpawnTimer = 0;      // counts frames while the fire is out at night
 const MAX_WAVE = 12;            // cap on zombies per wave
 const NPC_EVERY = 5;            // every Nth cave opening yields an NPC
+const FIRE_OUT_SPAWN_FRAMES = 180; // 3 seconds at 60 FPS
 
 // Offscreen canvas used for the night overlay so we can punch halo holes in it
 // without also erasing the world that was already rendered on the main canvas.
@@ -1942,14 +2743,17 @@ function initWorld() {
     buildings = [];
     zombies = [];
     npcs = [];
+    nextNpcId = 1;
     prevCaveOpen = false;
     prevNight = false;
+    fireOutSpawnTimer = 0;
 
     // --- Hand-placed landmarks + scattered forests ---
     entities = [
         // Landmarks
         new Entity(WORLD_WIDTH - 500, cy - 200, 'shop'),
         new Entity(500, cy + 300, 'blueprint_shop'),
+        new Entity(WORLD_WIDTH - 600, cy + 500, 'flower_shop'),
         new Entity(cx, 300, 'cave'),
         // Rocks scattered around
         new Entity(400, WORLD_HEIGHT - 400, 'rock'),
@@ -1982,6 +2786,43 @@ function initWorld() {
         placed++;
     }
 
+    // Scatter flowers (smaller, allowed closer to trees/landmarks).
+    const FLOWER_COLORS = ['#ff6fa5', '#f1c40f', '#9b59b6', '#e74c3c', '#ecf0f1', '#3498db'];
+    const flowerCount = 50;
+    let fAttempts = 0, fPlaced = 0;
+    const placedFlowers = [];
+    while (fPlaced < flowerCount && fAttempts < flowerCount * 8) {
+        fAttempts++;
+        const fx = 100 + Math.random() * (WORLD_WIDTH - 200);
+        const fy = 100 + Math.random() * (WORLD_HEIGHT - 200);
+        const clashes = landmarks.some(l => Math.hypot(fx - l.x, fy - l.y) < l.r * 0.55)
+            || placedFlowers.some(f => Math.hypot(fx - f.x, fy - f.y) < 28);
+        if (clashes) continue;
+        const f = new Entity(fx, fy, 'flower');
+        f.flowerColor = FLOWER_COLORS[Math.floor(Math.random() * FLOWER_COLORS.length)];
+        entities.push(f);
+        placedFlowers.push({ x: fx, y: fy });
+        fPlaced++;
+    }
+
+    // Scatter extra rocks across the map — avoid landmarks, trees, and each
+    // other so they don't overlap. The 8 hand-placed rocks above are still in.
+    const rockCount = 30;
+    let rAttempts = 0, rPlaced = 0;
+    const placedRocks = entities.filter(e => e.type === 'rock').map(e => ({ x: e.x, y: e.y }));
+    while (rPlaced < rockCount && rAttempts < rockCount * 10) {
+        rAttempts++;
+        const rx = 100 + Math.random() * (WORLD_WIDTH - 200);
+        const ry = 100 + Math.random() * (WORLD_HEIGHT - 200);
+        const clashes = landmarks.some(l => Math.hypot(rx - l.x, ry - l.y) < l.r)
+            || placedTrees.some(t => Math.hypot(rx - t.x, ry - t.y) < 60)
+            || placedRocks.some(r => Math.hypot(rx - r.x, ry - r.y) < 75);
+        if (clashes) continue;
+        entities.push(new Entity(rx, ry, 'rock'));
+        placedRocks.push({ x: rx, y: ry });
+        rPlaced++;
+    }
+
     cows = [
         new Cow(cx - 200, cy + 250),
         new Cow(cx + 220, cy + 280),
@@ -2004,6 +2845,29 @@ function isCaveOpen() {
     return isNightTime() || gameState.day >= 10;
 }
 
+// Real-time seconds remaining until the next day/night flip. The world clock
+// advances TIME_SPEED in-game minutes per frame at 60 FPS, so each real second
+// is TIME_SPEED * 60 ≈ 8 in-game minutes.
+function timeUntilFlip() {
+    const NIGHT_START = 20 * 60; // 20:00
+    const DAY_START   = 6 * 60;  // 06:00
+    const t = gameState.time;
+    let inGameMinutes, label;
+    if (isNightTime()) {
+        // Until 06:00. If still in the previous day's "after 20:00" window,
+        // add the wrap to the next morning.
+        inGameMinutes = (t >= NIGHT_START) ? (1440 - t) + DAY_START : (DAY_START - t);
+        label = 'Day in';
+    } else {
+        inGameMinutes = NIGHT_START - t;
+        label = 'Night in';
+    }
+    const realSec = Math.max(0, Math.ceil(inGameMinutes / (TIME_SPEED * 60)));
+    const mm = Math.floor(realSec / 60);
+    const ss = realSec % 60;
+    return { label, text: `${label} ${mm}:${ss.toString().padStart(2, '0')}`, realSec };
+}
+
 // Smooth darkness curve: 0 during day, MAX during full night, linear fade through dusk/dawn.
 const NIGHT_MAX_ALPHA = 0.6;
 function getNightOpacity() {
@@ -2020,6 +2884,7 @@ function getNightOpacity() {
 
 function checkInteractions() {
     players.forEach((player) => {
+        if (player.downed) return; // can't act while waiting for a revive
         // Remote players signal "action" via a network-supplied latch; local
         // players use the global keys map (and we consume the press here).
         let actionPressed;
@@ -2034,13 +2899,51 @@ function checkInteractions() {
 
         let didSomething = false;
 
-        // 1) Shop / blueprint shop have highest priority — open menu
+        // -1) Revive a downed teammate — highest priority so you can revive
+        // someone even if they're lying next to a shop or a tree.
+        for (const other of players) {
+            if (other === player || !other.downed) continue;
+            if (Math.hypot(player.x - other.x, player.y - other.y) < 60) {
+                other.downed = false;
+                other.hp = 50;
+                gameState.showMessage(`${player.name} revived ${other.name}!`);
+                return;
+            }
+        }
+
+        // 0) Placement mode — F drops the ghost wherever the buyer is standing.
+        if (gameState.placingBuilding && gameState.placingBuilding.buyer === player) {
+            const pb = gameState.placingBuilding;
+            const bx = Math.max(pb.w / 2 + 10, Math.min(WORLD_WIDTH  - pb.w / 2 - 10, player.x));
+            const by = Math.max(pb.h / 2 + 10, Math.min(WORLD_HEIGHT - pb.h / 2 - 10, player.y));
+            buildings.push(new Building(bx, by, pb.type, pb.w, pb.h, false));
+            const bpName = BLUEPRINTS[pb.type] ? BLUEPRINTS[pb.type].name : pb.type;
+            gameState.placingBuilding = null;
+            gameState.showMessage(`${bpName} blueprint dropped — press F again at the blueprint to build it.`);
+            return;
+        }
+
+        // 1) Shop / blueprint shop / flower shop have highest priority — open menu
         for (const ent of entities) {
             if (!ent.active) continue;
-            if (ent.type !== 'shop' && ent.type !== 'blueprint_shop') continue;
+            if (ent.type !== 'shop' && ent.type !== 'blueprint_shop' && ent.type !== 'flower_shop') continue;
             if (Math.hypot(player.x - ent.x, player.y - ent.y) < 70) {
                 if (ent.type === 'shop') openShop(player);
-                else openBlueprintShop(player);
+                else if (ent.type === 'blueprint_shop') openBlueprintShop(player);
+                else openFlowerShop(player);
+                didSomething = true;
+                break;
+            }
+        }
+        if (didSomething) return;
+
+        // 1.25) Standing on an unplaced blueprint — confirm to build it.
+        for (const b of buildings) {
+            if (b.placed) continue;
+            if (Math.hypot(player.x - b.x, player.y - b.y) < 70) {
+                b.placed = true;
+                const bp = BLUEPRINTS[b.type];
+                gameState.showMessage(`${player.name} built the ${bp ? bp.name : b.type}!`);
                 didSomething = true;
                 break;
             }
@@ -2087,10 +2990,21 @@ function checkInteractions() {
             return;
         }
 
-        // 3) Trees & rocks
+        // 3) Trees, rocks, flowers, cave
         for (const ent of entities) {
             if (!ent.active) continue;
             const dist = Math.hypot(player.x - ent.x, player.y - ent.y);
+
+            if (ent.type === 'flower') {
+                if (dist >= 45) continue;
+                gameState.flowers++;
+                ent.active = false;
+                ent.respawnDay = gameState.day + 1;
+                gameState.showMessage(`${player.name} picked a flower (+1).`);
+                didSomething = true;
+                break;
+            }
+
             if (dist >= 60) continue;
 
             if (ent.type === 'tree') {
@@ -2171,17 +3085,45 @@ function checkInteractions() {
 // --- SHOP MENU ---
 const SHOP_PRICES = { axe: 20, pickaxe: 25, sword: 30 };
 
-function openShop(player) {
-    if (gameState.shopOpen) return;
-    gameState.shopOpen = true;
-    gameState.shopBuyer = player.name;
+// Generic helper: who opened the currently-active menu of `kind`. cid 0 = host,
+// >0 = a client. Used so host knows when a close should ping the right client.
+function menuOwnerCidFor(kind) {
+    return gameState[`${kind}OwnerCid`] || 0;
+}
+
+// Show the shop UI locally — used both directly (offline / host's own buyer)
+// and from the network 'menu_open' handler on a client.
+function showShopLocally(buyerName) {
+    gameState.shopBuyer = buyerName;
     refreshShopMenu();
     document.getElementById('shop-menu').style.display = 'block';
 }
 
+function openShop(player) {
+    if (isMenuOpen()) return;
+    gameState.shopOpen = true;
+    gameState.shopBuyer = player.name;
+    const cid = player.remoteClientId || 0;
+    gameState.shopOwnerCid = cid;
+    if (netMode === 'host' && cid !== 0) {
+        // Remote buyer — UI belongs on their screen, not the host's.
+        netSend({ type: 'menu_open', kind: 'shop', cid, buyer: player.name });
+        return;
+    }
+    showShopLocally(player.name);
+}
+
 function closeShop() {
+    const wasOwner = gameState.shopOwnerCid;
+    if (netMode === 'client') {
+        netSend({ type: 'shop_action', kind: 'shop', action: 'close' });
+    }
     gameState.shopOpen = false;
+    gameState.shopOwnerCid = null;
     document.getElementById('shop-menu').style.display = 'none';
+    if (netMode === 'host' && wasOwner && wasOwner !== 0) {
+        netSend({ type: 'menu_close', kind: 'shop', cid: wasOwner });
+    }
 }
 
 function refreshShopMenu() {
@@ -2222,6 +3164,10 @@ function refreshShopMenu() {
 }
 
 function shopSellWood(amount) {
+    if (netMode === 'client') {
+        netSend({ type: 'shop_action', kind: 'shop', action: 'sell_wood', amount });
+        return;
+    }
     if (gameState.wood <= 0) {
         gameState.showMessage(`No wood to sell.`);
         return;
@@ -2239,6 +3185,10 @@ function shopSellWood(amount) {
 }
 
 function shopBuy(toolKey) {
+    if (netMode === 'client') {
+        netSend({ type: 'shop_action', kind: 'shop', action: 'buy', tool: toolKey });
+        return;
+    }
     if (gameState.tools[toolKey]) {
         gameState.showMessage(`Already own a ${toolKey}.`);
         return;
@@ -2254,7 +3204,20 @@ function shopBuy(toolKey) {
     refreshShopMenu();
 }
 
+// Any player's action key (F or L) also closes whichever shop/menu is open.
+// Consume the key in `keys` so the next checkInteractions tick doesn't re-open
+// the same shop the player is still standing next to.
+function isMenuActionKey(code) { return code === 'KeyF' || code === 'KeyL'; }
+
 window.addEventListener('keydown', e => {
+    // 0 = host's perspective (offline / single / host-self). For a client, this
+    // is the assigned clientId. Only the browser that actually owns a menu
+    // should drive its digit keys.
+    const myCid = (netMode === 'client') ? netClientId : 0;
+    if (gameState.shopOpen && (gameState.shopOwnerCid || 0) !== myCid) return;
+    if (gameState.blueprintShopOpen && (gameState.blueprintShopOwnerCid || 0) !== myCid) return;
+    if (gameState.flowerShopOpen && (gameState.flowerShopOwnerCid || 0) !== myCid) return;
+    if (gameState.npcMenuOpen && (gameState.npcMenuOwnerCid || 0) !== myCid) return;
     if (gameState.shopOpen) {
         if (e.code === 'Digit1' || e.code === 'Numpad1') shopSellWood(1);
         else if (e.code === 'Digit2' || e.code === 'Numpad2') shopSellWood(10);
@@ -2262,12 +3225,28 @@ window.addEventListener('keydown', e => {
         else if (e.code === 'Digit4' || e.code === 'Numpad4') shopBuy('axe');
         else if (e.code === 'Digit5' || e.code === 'Numpad5') shopBuy('pickaxe');
         else if (e.code === 'Digit6' || e.code === 'Numpad6') shopBuy('sword');
-        else if (e.code === 'Digit7' || e.code === 'Numpad7' || e.code === 'Escape') closeShop();
+        else if (e.code === 'Digit7' || e.code === 'Numpad7' || e.code === 'Escape' || isMenuActionKey(e.code)) {
+            closeShop();
+            keys[e.code] = false;
+        }
     } else if (gameState.blueprintShopOpen) {
         if (e.code === 'Digit1' || e.code === 'Numpad1') buyBlueprint('small_shack');
         else if (e.code === 'Digit2' || e.code === 'Numpad2') buyBlueprint('stone_cottage');
         else if (e.code === 'Digit3' || e.code === 'Numpad3') buyBlueprint('watch_tower');
-        else if (e.code === 'Digit4' || e.code === 'Numpad4' || e.code === 'Escape') closeBlueprintShop();
+        else if (e.code === 'Digit4' || e.code === 'Numpad4' || e.code === 'Escape' || isMenuActionKey(e.code)) {
+            closeBlueprintShop();
+            keys[e.code] = false;
+        }
+    } else if (gameState.flowerShopOpen) {
+        if (e.code === 'Digit1' || e.code === 'Numpad1') flowerSell(1);
+        else if (e.code === 'Digit2' || e.code === 'Numpad2') flowerSell(10);
+        else if (e.code === 'Digit3' || e.code === 'Numpad3') flowerSell('all');
+        else if (e.code === 'Digit4' || e.code === 'Numpad4') flowerBuy('armor');
+        else if (e.code === 'Digit5' || e.code === 'Numpad5') flowerBuy('shield');
+        else if (e.code === 'Digit6' || e.code === 'Numpad6' || e.code === 'Escape' || isMenuActionKey(e.code)) {
+            closeFlowerShop();
+            keys[e.code] = false;
+        }
     } else if (gameState.npcMenuOpen) {
         if (e.code === 'Digit1' || e.code === 'Numpad1') npcSetTask('chop');
         else if (e.code === 'Digit2' || e.code === 'Numpad2') npcSetTask('hunt');
@@ -2276,7 +3255,10 @@ window.addEventListener('keydown', e => {
         else if (e.code === 'Digit5' || e.code === 'Numpad5') npcBuyTool('pickaxe', 25);
         else if (e.code === 'Digit6' || e.code === 'Numpad6') npcBuyTool('sword',   30);
         else if (e.code === 'Digit7' || e.code === 'Numpad7') npcCollectShare();
-        else if (e.code === 'Digit8' || e.code === 'Numpad8' || e.code === 'Escape') closeNPCMenu();
+        else if (e.code === 'Digit8' || e.code === 'Numpad8' || e.code === 'Escape' || isMenuActionKey(e.code)) {
+            closeNPCMenu();
+            keys[e.code] = false;
+        }
     }
 });
 
@@ -2287,17 +3269,36 @@ const BLUEPRINTS = {
     watch_tower:   { name: "Watch Tower",   w: 90,  h: 130, cost: { wood: 15, stone: 40, gold: 20 } },
 };
 
-function openBlueprintShop(player) {
-    if (isMenuOpen()) return;
-    gameState.blueprintShopOpen = true;
-    gameState.blueprintBuyer = player;
+function showBpLocally(buyer) {
+    gameState.blueprintBuyer = buyer;
     refreshBlueprintMenu();
     document.getElementById('bp-menu').style.display = 'block';
 }
 
+function openBlueprintShop(player) {
+    if (isMenuOpen()) return;
+    gameState.blueprintShopOpen = true;
+    gameState.blueprintBuyer = player;
+    const cid = player.remoteClientId || 0;
+    gameState.blueprintShopOwnerCid = cid;
+    if (netMode === 'host' && cid !== 0) {
+        netSend({ type: 'menu_open', kind: 'blueprint_shop', cid, buyer: player.name });
+        return;
+    }
+    showBpLocally(player);
+}
+
 function closeBlueprintShop() {
+    const wasOwner = gameState.blueprintShopOwnerCid;
+    if (netMode === 'client') {
+        netSend({ type: 'shop_action', kind: 'blueprint_shop', action: 'close' });
+    }
     gameState.blueprintShopOpen = false;
+    gameState.blueprintShopOwnerCid = null;
     document.getElementById('bp-menu').style.display = 'none';
+    if (netMode === 'host' && wasOwner && wasOwner !== 0) {
+        netSend({ type: 'menu_close', kind: 'blueprint_shop', cid: wasOwner });
+    }
 }
 
 function refreshBlueprintMenu() {
@@ -2324,42 +3325,191 @@ function refreshBlueprintMenu() {
     document.getElementById('bp-opt-4').textContent = '[4] Close';
 }
 
-// --- NPC MENU ---
-function openNPCMenu(player, npc) {
+// --- FLOWER SHOP ---
+const FLOWER_PRICES = { armor: 50, shield: 40 };
+const SILVER_PER_FLOWER = 3;
+
+function showFlowerLocally(buyer) {
+    gameState.flowerBuyer = buyer;
+    refreshFlowerMenu();
+    document.getElementById('flower-menu').style.display = 'block';
+}
+
+function openFlowerShop(player) {
     if (isMenuOpen()) return;
-    gameState.npcMenuOpen = true;
+    gameState.flowerShopOpen = true;
+    gameState.flowerBuyer = player;
+    const cid = player.remoteClientId || 0;
+    gameState.flowerShopOwnerCid = cid;
+    if (netMode === 'host' && cid !== 0) {
+        netSend({ type: 'menu_open', kind: 'flower_shop', cid, buyer: player.name });
+        return;
+    }
+    showFlowerLocally(player);
+}
+
+function closeFlowerShop() {
+    const wasOwner = gameState.flowerShopOwnerCid;
+    if (netMode === 'client') {
+        netSend({ type: 'shop_action', kind: 'flower_shop', action: 'close' });
+    }
+    gameState.flowerShopOpen = false;
+    gameState.flowerShopOwnerCid = null;
+    document.getElementById('flower-menu').style.display = 'none';
+    if (netMode === 'host' && wasOwner && wasOwner !== 0) {
+        netSend({ type: 'menu_close', kind: 'flower_shop', cid: wasOwner });
+    }
+}
+
+function refreshFlowerMenu() {
+    document.getElementById('flower-info').innerHTML =
+        `Customer: <b>${gameState.flowerBuyer ? gameState.flowerBuyer.name : 'P1'}</b><br>` +
+        `${SPRITES.flower} ${gameState.flowers} &nbsp; ${SPRITES.silver} ${gameState.silver}`;
+
+    const sellOpt = (id, n, label) => {
+        const el = document.getElementById(id);
+        const haveEnough = gameState.flowers >= n;
+        el.innerHTML = `[${id.slice(-1)}] ${label} ${SPRITES.flower} → ${n * SILVER_PER_FLOWER} ${SPRITES.silver}`;
+        el.classList.toggle('dim', !haveEnough);
+    };
+    sellOpt('flower-opt-1', 1, 'Sell 1 Flower');
+    sellOpt('flower-opt-2', 10, 'Sell 10 Flowers');
+
+    const opt3 = document.getElementById('flower-opt-3');
+    opt3.innerHTML = `[3] Sell ALL Flowers ${SPRITES.flower} (${gameState.flowers} × ${SILVER_PER_FLOWER} = ${gameState.flowers * SILVER_PER_FLOWER}s ${SPRITES.silver})`;
+    opt3.classList.toggle('dim', gameState.flowers <= 0);
+
+    const setBuyOpt = (id, key, label, sprite, price, note) => {
+        const el = document.getElementById(id);
+        const idx = id.slice(-1);
+        if (gameState.tools[key]) {
+            el.innerHTML = `[${idx}] ${sprite} ${label} — OWNED`;
+            el.classList.add('dim');
+        } else {
+            el.innerHTML = `[${idx}] ${sprite} Buy ${label} — ${price} ${SPRITES.silver} <small>${note}</small>`;
+            el.classList.toggle('dim', gameState.silver < price);
+        }
+    };
+    setBuyOpt('flower-opt-4', 'armor',  'Armor',  SPRITES.armor,  FLOWER_PRICES.armor,  '(passive -40%)');
+    setBuyOpt('flower-opt-5', 'shield', 'Shield', SPRITES.shield, FLOWER_PRICES.shield, '(only when held, -50%)');
+
+    document.getElementById('flower-opt-6').textContent = '[6] Close';
+}
+
+function flowerSell(amount) {
+    if (netMode === 'client') {
+        netSend({ type: 'shop_action', kind: 'flower_shop', action: 'sell', amount });
+        return;
+    }
+    if (gameState.flowers <= 0) {
+        gameState.showMessage(`No flowers to sell.`);
+        return;
+    }
+    const sold = amount === 'all' ? gameState.flowers : Math.min(amount, gameState.flowers);
+    if (sold <= 0) {
+        gameState.showMessage(`Need ${amount} flowers to sell that bundle.`);
+        return;
+    }
+    const earned = sold * SILVER_PER_FLOWER;
+    gameState.silver += earned;
+    gameState.flowers -= sold;
+    gameState.showMessage(`Sold ${sold} flowers for ${earned} silver.`);
+    refreshFlowerMenu();
+}
+
+function flowerBuy(toolKey) {
+    if (netMode === 'client') {
+        netSend({ type: 'shop_action', kind: 'flower_shop', action: 'buy', tool: toolKey });
+        return;
+    }
+    if (gameState.tools[toolKey]) {
+        gameState.showMessage(`Already own ${toolKey}.`);
+        return;
+    }
+    const price = FLOWER_PRICES[toolKey];
+    if (gameState.silver < price) {
+        gameState.showMessage(`Not enough silver (need ${price}).`);
+        return;
+    }
+    gameState.silver -= price;
+    gameState.tools[toolKey] = true;
+    gameState.showMessage(`Bought ${toolKey}! ${toolKey === 'shield' ? 'Cycle to hold it for the bonus.' : 'You now resist damage.'}`);
+    refreshFlowerMenu();
+}
+
+// --- NPC MENU ---
+function showNpcMenuLocally(npc, buyer) {
     gameState.activeNPC = npc;
-    gameState.npcBuyer = player;
+    gameState.activeNPCId = npc ? npc.id : null;
+    gameState.npcBuyer = buyer;
     refreshNPCMenu();
     document.getElementById('npc-menu').style.display = 'block';
 }
 
+function openNPCMenu(player, npc) {
+    if (isMenuOpen()) return;
+    gameState.npcMenuOpen = true;
+    gameState.activeNPC = npc;
+    gameState.activeNPCId = npc.id;
+    gameState.npcBuyer = player;
+    const cid = player.remoteClientId || 0;
+    gameState.npcMenuOwnerCid = cid;
+    if (netMode === 'host' && cid !== 0) {
+        netSend({ type: 'menu_open', kind: 'npc', cid, buyer: player.name, npcId: npc.id });
+        return;
+    }
+    showNpcMenuLocally(npc, player);
+}
+
 function closeNPCMenu() {
+    const wasOwner = gameState.npcMenuOwnerCid;
+    if (netMode === 'client') {
+        netSend({ type: 'shop_action', kind: 'npc', action: 'close' });
+    }
     gameState.npcMenuOpen = false;
     gameState.activeNPC = null;
+    gameState.activeNPCId = null;
+    gameState.npcMenuOwnerCid = null;
     document.getElementById('npc-menu').style.display = 'none';
+    if (netMode === 'host' && wasOwner && wasOwner !== 0) {
+        netSend({ type: 'menu_close', kind: 'npc', cid: wasOwner });
+    }
 }
 
 function refreshNPCMenu() {
-    const npc = gameState.activeNPC;
+    // Resolve by id each call — on the client the npcs array is rebuilt on
+    // every snapshot so the cached `activeNPC` reference goes stale.
+    let npc = gameState.activeNPC;
+    if ((!npc || npc.id !== gameState.activeNPCId) && gameState.activeNPCId != null) {
+        npc = npcs.find(n => n.id === gameState.activeNPCId) || null;
+        gameState.activeNPC = npc;
+    }
     if (!npc) return;
     const ownsAxe   = npc.tools.axe;
     const ownsPick  = npc.tools.pickaxe;
     const ownsSword = npc.tools.sword;
     const share = Math.floor(npc.earnings * 0.25);
+    const night = isNightTime();
+    const tasksLocked = !night;
+    const lockLine = tasksLocked
+        ? `<br><span style="color:#e67e22">Daytime task is locked — come back at night to change it.</span>`
+        : `<br><span style="color:#2ecc71">It's night — set the daytime task you want for tomorrow.</span>`;
     document.getElementById('npc-info').innerHTML =
-        `<b>${npc.name}</b> &nbsp; <i>Task: ${npc.task}</i><br>` +
+        `<b>${npc.name}</b> &nbsp; <i>Day task: ${npc.task}</i>${lockLine}<br>` +
         `Tools: ${[ownsAxe?'axe':'', ownsPick?'pickaxe':'', ownsSword?'sword':''].filter(Boolean).join(', ') || '(none)'}<br>` +
         `${SPRITES.gold} ${gameState.gold} &nbsp;|&nbsp; NPC earnings: ${npc.earnings}g (your cut: ${share}g)`;
 
     const setTask = (id, label, requires) => {
         const el = document.getElementById(id);
         el.textContent = label;
-        el.classList.toggle('dim', requires && !npc.tools[requires]);
+        const missingTool = requires && !npc.tools[requires];
+        el.classList.toggle('dim', missingTool || tasksLocked);
     };
     setTask('npc-opt-1', '[1] Task: Chop trees (needs axe)',  'axe');
     setTask('npc-opt-2', '[2] Task: Hunt animals (needs sword)', 'sword');
-    document.getElementById('npc-opt-3').textContent = '[3] Task: Idle';
+    const idleEl = document.getElementById('npc-opt-3');
+    idleEl.textContent = '[3] Task: Idle';
+    idleEl.classList.toggle('dim', tasksLocked);
 
     const setBuy = (id, key, label, price) => {
         const el = document.getElementById(id);
@@ -2383,18 +3533,30 @@ function refreshNPCMenu() {
 }
 
 function npcSetTask(task) {
+    if (netMode === 'client') {
+        netSend({ type: 'shop_action', kind: 'npc', action: 'set_task', task });
+        return;
+    }
     const npc = gameState.activeNPC;
     if (!npc) return;
+    if (!isNightTime()) {
+        gameState.showMessage(`You can only give ${npc.name} a daytime task at night.`);
+        return;
+    }
     if (task === 'chop' && !npc.tools.axe)   { gameState.showMessage(`${npc.name} needs an axe to chop.`); return; }
     if (task === 'hunt' && !npc.tools.sword) { gameState.showMessage(`${npc.name} needs a sword to hunt.`); return; }
     npc.task = task;
     npc.target = null;
     npc.workTimer = 0;
-    gameState.showMessage(`${npc.name} now ${task === 'idle' ? 'standing idle' : task === 'chop' ? 'chopping trees' : 'hunting animals'}.`);
+    gameState.showMessage(`${npc.name} will ${task === 'idle' ? 'stand idle' : task === 'chop' ? 'chop trees' : 'hunt animals'} tomorrow.`);
     refreshNPCMenu();
 }
 
 function npcBuyTool(toolKey, price) {
+    if (netMode === 'client') {
+        netSend({ type: 'shop_action', kind: 'npc', action: 'buy_tool', tool: toolKey, price });
+        return;
+    }
     const npc = gameState.activeNPC;
     if (!npc) return;
     if (npc.tools[toolKey]) { gameState.showMessage(`${npc.name} already has a ${toolKey}.`); return; }
@@ -2406,6 +3568,10 @@ function npcBuyTool(toolKey, price) {
 }
 
 function npcCollectShare() {
+    if (netMode === 'client') {
+        netSend({ type: 'shop_action', kind: 'npc', action: 'collect' });
+        return;
+    }
     const npc = gameState.activeNPC;
     if (!npc) return;
     const got = npc.collectShare();
@@ -2415,6 +3581,14 @@ function npcCollectShare() {
 }
 
 function buyBlueprint(key) {
+    if (netMode === 'client') {
+        netSend({ type: 'shop_action', kind: 'blueprint_shop', action: 'buy', bp: key });
+        return;
+    }
+    if (gameState.placingBuilding) {
+        gameState.showMessage(`You're already placing a blueprint — drop it (F) or cancel (Esc) first.`);
+        return;
+    }
     const bp = BLUEPRINTS[key];
     const c = bp.cost;
     if (gameState.wood < c.wood || gameState.stone < c.stone || gameState.gold < c.gold) {
@@ -2425,28 +3599,33 @@ function buyBlueprint(key) {
     gameState.stone -= c.stone;
     gameState.gold  -= c.gold;
 
-    // Place south of the buyer, clamped to world bounds.
+    // Enter placement mode — the buyer carries a translucent ghost around
+    // and presses F where they want to drop the blueprint. Esc refunds.
     const buyer = gameState.blueprintBuyer || players[0];
-    let bx = buyer.x;
-    let by = buyer.y + 130;
-    bx = Math.max(bp.w / 2 + 10, Math.min(WORLD_WIDTH  - bp.w / 2 - 10, bx));
-    by = Math.max(bp.h / 2 + 10, Math.min(WORLD_HEIGHT - bp.h / 2 - 10, by));
-    buildings.push(new Building(bx, by, key, bp.w, bp.h));
-    gameState.showMessage(`Built a ${bp.name}!`);
-    refreshBlueprintMenu();
+    gameState.placingBuilding = { type: key, w: bp.w, h: bp.h, buyer };
+    closeBlueprintShop();
+    gameState.showMessage(`Move where you want the ${bp.name}, press F to drop, Esc to cancel.`);
 }
 
 function updateUI() {
     const hours = Math.floor(gameState.time / 60).toString().padStart(2, '0');
     const minutes = Math.floor(gameState.time % 60).toString().padStart(2, '0');
     
+    const flip = timeUntilFlip();
+    // Color the countdown: amber under 30s, red under 10s, gray otherwise.
+    const flipColor = flip.realSec <= 10 ? '#e74c3c'
+        : flip.realSec <= 30 ? '#f39c12'
+        : '#bdc3c7';
     document.getElementById('ui-day').innerHTML =
         `${SPRITES.clock} Day ${gameState.day} — ${hours}:${minutes}` +
+        `<span class="sep">|</span><span style="color:${flipColor}">${flip.text}</span>` +
         `<span class="sep">|</span>⚔ Encounters: ${gameState.encounters || 0}`;
     document.getElementById('ui-resources').innerHTML =
         `${SPRITES.wood} ${gameState.wood}<span class="sep">|</span>` +
         `${SPRITES.stone} ${gameState.stone}<span class="sep">|</span>` +
-        `${SPRITES.gold} ${gameState.gold}`;
+        `${SPRITES.gold} ${gameState.gold}<span class="sep">|</span>` +
+        `${SPRITES.silver} ${gameState.silver}<span class="sep">|</span>` +
+        `${SPRITES.flower} ${gameState.flowers}`;
     document.getElementById('ui-food').innerHTML =
         `${SPRITES.rawMeat} ${gameState.rawMeat}<span class="sep">|</span>` +
         `${SPRITES.cookedMeat} ${gameState.cookedMeat}`;
@@ -2467,6 +3646,8 @@ function updateUI() {
     hpEl.style.color = players.some(p => p.hp < 30) ? '#e74c3c' : 'white';
 
     if (gameState.shopOpen) refreshShopMenu();
+    if (gameState.flowerShopOpen) refreshFlowerMenu();
+    if (gameState.npcMenuOpen) refreshNPCMenu();
 
     const fuelPercent = Math.max(0, Math.floor((mainCampfire.currentFuel / mainCampfire.maxFuel) * 100));
     const fireUI = document.getElementById('ui-fire');
@@ -2537,6 +3718,24 @@ function gameLoop() {
             }
         }
         prevCaveOpen = caveOpenNow;
+
+        // Fire-out trickle: while the campfire is dead during night, the cave
+        // leaks a zombie every 3 seconds (180 frames at 60 FPS).
+        if (!mainCampfire.active && isNightTime()) {
+            fireOutSpawnTimer++;
+            if (fireOutSpawnTimer >= FIRE_OUT_SPAWN_FRAMES) {
+                fireOutSpawnTimer = 0;
+                const cave = entities.find(e => e.type === 'cave' && e.active);
+                if (cave) {
+                    const ox = (Math.random() - 0.5) * 80;
+                    const oy = 30 + Math.random() * 30;
+                    zombies.push(new Zombie(cave.x + ox, cave.y + oy));
+                    gameState.showMessage(`The fire is out — a zombie crawls out of the cave!`);
+                }
+            }
+        } else {
+            fireOutSpawnTimer = 0;
+        }
 
         // Encounter counter: count a "monster encounter" each time night ends
         // (06:00 transition) if at least one zombie was killed during the night.
@@ -2646,6 +3845,16 @@ function gameLoop() {
         b.drawRoof(ctx, anyInside ? 0 : 1.0);
     });
 
+    // Placement-mode ghost — follows the buyer until they press F.
+    if (gameState.placingBuilding && gameState.placingBuilding.buyer) {
+        const pb = gameState.placingBuilding;
+        const buyer = pb.buyer;
+        const gx = Math.max(pb.w / 2 + 10, Math.min(WORLD_WIDTH  - pb.w / 2 - 10, buyer.x));
+        const gy = Math.max(pb.h / 2 + 10, Math.min(WORLD_HEIGHT - pb.h / 2 - 10, buyer.y));
+        const ghost = new Building(gx, gy, pb.type, pb.w, pb.h, false);
+        ghost.drawBase(ctx);
+    }
+
     ctx.restore();
 
     // Night / Lighting Pass — built on an offscreen canvas so the destination-out
@@ -2674,10 +3883,10 @@ function gameLoop() {
             nctx.beginPath(); nctx.arc(sx, sy, r, 0, Math.PI * 2); nctx.fill();
         }
 
-        // Shop & blueprint-shop lanterns
+        // Shop, blueprint-shop, and flower-shop lanterns
         for (const ent of entities) {
             if (!ent.active) continue;
-            if (ent.type !== 'shop' && ent.type !== 'blueprint_shop') continue;
+            if (ent.type !== 'shop' && ent.type !== 'blueprint_shop' && ent.type !== 'flower_shop') continue;
             const sx = ent.x - camera.x;
             const sy = ent.y - camera.y;
             const r = 150;

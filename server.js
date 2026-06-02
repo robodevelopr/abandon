@@ -22,6 +22,7 @@
 
 const http = require('http');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { URL } = require('url');
 const { WebSocketServer } = require('ws');
@@ -29,6 +30,17 @@ const { WebSocketServer } = require('ws');
 const PORT = Number(process.env.PORT) || 8080;
 const HOST = process.env.HOST || '0.0.0.0';
 const ROOT = __dirname;
+
+function localIPv4s() {
+    const out = [];
+    const nets = os.networkInterfaces();
+    for (const name of Object.keys(nets)) {
+        for (const net of nets[name]) {
+            if (net.family === 'IPv4' && !net.internal) out.push(net.address);
+        }
+    }
+    return out;
+}
 
 const MIME = {
     '.html': 'text/html; charset=utf-8',
@@ -52,6 +64,17 @@ const httpServer = http.createServer((req, res) => {
     catch (_) { res.writeHead(400); res.end('Bad request'); return; }
 
     if (urlPath === '/') urlPath = '/index.html';
+
+    // /lan — small JSON endpoint so the hosting browser can find out which
+    // LAN IPs it should hand out to friends.
+    if (urlPath === '/lan') {
+        res.writeHead(200, {
+            'Content-Type': 'application/json; charset=utf-8',
+            'Cache-Control': 'no-store',
+        });
+        res.end(JSON.stringify({ ips: localIPv4s(), port: PORT }));
+        return;
+    }
 
     const filePath = path.normalize(path.join(ROOT, urlPath));
     if (!filePath.startsWith(ROOT + path.sep) && filePath !== ROOT) {
@@ -155,4 +178,9 @@ wss.on('connection', (ws, req) => {
 
 httpServer.listen(PORT, HOST, () => {
     console.log(`HTTP + WS listening on http://${HOST}:${PORT}/`);
+    const ips = localIPv4s();
+    if (ips.length) {
+        console.log('Share with friends on your LAN:');
+        for (const ip of ips) console.log(`  http://${ip}:${PORT}/`);
+    }
 });
